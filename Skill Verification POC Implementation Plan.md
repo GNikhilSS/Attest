@@ -35,7 +35,7 @@ All transitions run through one function that rejects invalid moves. Every trans
 | `Skill` | skillName (unique) |
 | `Question` | skillId, proficiencyLevel, questionType (SCRATCH or DEBUG), questionContent, starterCode (optional) |
 | `TestCase` | questionId, input, expectedOutput, visibility (VISIBLE, HIDDEN\_A, HIDDEN\_B) |
-| `Attempt` | employeeId, approvedById (optional until approved), skillId, proficiencyLevel, status, startTime, deadline |
+| `Attempt` | employeeId, approvedById (optional until approved), skillId, proficiencyLevel, status, startTime, deadline, decision (APPROVED or REJECTED, optional until decided), decisionReason (optional, required when rejected) |
 | `AttemptQuestion` | attemptId + questionId (composite primary key), position (unique per attempt) |
 | `Submission` | attemptId + questionId (references AttemptQuestion), submittedAnswer, isCorrect (optional until graded), submittedAt. Every submit adds a row. |
 | `AttemptEvent` | attemptId, type, serverTime (set by server), payload (JSON) |
@@ -83,3 +83,5 @@ Steps 1 and 2 come first because every other step depends on them.
 - [ ] Can an attempt be created without an approval? Current position: no.
 - [ ] Retake wait: 14 days, proposed. Confirm per skill and level.
 - [ ] Heartbeat and away-time tracking: deferred until after the POC.
+
+* [ ] Manager change: access follows the current manager (`employee.managedById`), so the new manager can act on open attempts. Decided attempts keep the original approver in `approvedById` as the audit record, but the new manager can still view their reports. Confirm whether old reports should stay visible to the new manager, or be locked to the approver.

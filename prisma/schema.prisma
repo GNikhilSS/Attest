@@ -61,6 +61,8 @@ model Attempt {
   status AttemptStatus
   startTime DateTime
   deadline DateTime
+  decision Decision?
+  decisionReason String?
 
   attemptBy Employee @relation("AttemptBy",fields: [employeeId], references: [id])
   approvedBy Employee? @relation("ApprovedBy", fields: [approvedById], references: [id])
@@ -123,4 +125,9 @@ enum AttemptStatus {
   SUBMITTED
   GRADED
   DECIDED
+}
+
+enum Decision {
+  APPROVED
+  REJECTED
 }
