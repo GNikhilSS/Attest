@@ -6,11 +6,13 @@ import {
   vi,
 } from "vitest";
 
-import { AttemptStatus as S } from "../../generated/prisma/client.js";
+import { AttemptStatus as S, Decision } from "../../generated/prisma/client.js";
 
 const prismaMocks = vi.hoisted(() => ({
   findUnique: vi.fn(),
   updateMany: vi.fn(),
+  executeRaw: vi.fn(),
+  queryRaw: vi.fn(),
   createEvent: vi.fn(),
   transaction: vi.fn(),
 }));
@@ -49,11 +51,17 @@ function setupAttempt(
 ) {
   prismaMocks.findUnique.mockResolvedValue(attempt);
   prismaMocks.updateMany.mockResolvedValue({ count: 1 });
+  prismaMocks.executeRaw.mockResolvedValue(1);
+  prismaMocks.queryRaw.mockResolvedValue([
+    { now: new Date("2026-10-17T14:00:00.000Z") },
+  ]);
   prismaMocks.createEvent.mockResolvedValue({ id: 100 });
 
   prismaMocks.transaction.mockImplementation(
     async (callback: (tx: any) => Promise<unknown>) =>
       callback({
+        $executeRaw: prismaMocks.executeRaw,
+        $queryRaw: prismaMocks.queryRaw,
         attempt: {
           findUnique: prismaMocks.findUnique,
           updateMany: prismaMocks.updateMany,
@@ -193,18 +201,64 @@ describe("transitionAttempt", () => {
     expect(result.fromState).toBe(S.CREATED);
     expect(result.toState).toBe(S.IN_PROGRESS);
 
-    expect(prismaMocks.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 10,
-        status: S.CREATED,
-      },
-      data: {
-        status: S.IN_PROGRESS,
-        startTime: expect.any(Date),
-      },
-    });
-
+    expect(prismaMocks.executeRaw).toHaveBeenCalledOnce();
+    expect(prismaMocks.updateMany).not.toHaveBeenCalled();
     expect(prismaMocks.createEvent).toHaveBeenCalledOnce();
+  });
+
+  it("rejects opening an attempt after the deadline", async () => {
+    setupAttempt(
+      makeAttempt({
+        status: S.CREATED,
+        deadline: pastDeadline,
+      }),
+    );
+
+    await expect(
+      transitionAttempt({
+        attemptId: 10,
+        toState: S.IN_PROGRESS,
+        actor: {
+          type: "EMPLOYEE",
+          employeeId: 2,
+        },
+      }),
+    ).rejects.toThrow("DEADLINE_PASSED");
+
+    expect(prismaMocks.updateMany).not.toHaveBeenCalled();
+    expect(prismaMocks.createEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects opening an attempt exactly at the deadline", async () => {
+    const deadline = new Date("2026-10-17T13:00:00.000Z");
+
+    vi.useFakeTimers();
+    vi.setSystemTime(deadline);
+
+    try {
+      setupAttempt(
+        makeAttempt({
+          status: S.CREATED,
+          deadline,
+        }),
+      );
+
+      await expect(
+        transitionAttempt({
+          attemptId: 10,
+          toState: S.IN_PROGRESS,
+          actor: {
+            type: "EMPLOYEE",
+            employeeId: 2,
+          },
+        }),
+      ).rejects.toThrow("DEADLINE_PASSED");
+
+      expect(prismaMocks.updateMany).not.toHaveBeenCalled();
+      expect(prismaMocks.createEvent).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("allows employee submission before the deadline", async () => {
@@ -227,17 +281,8 @@ describe("transitionAttempt", () => {
     expect(result.fromState).toBe(S.IN_PROGRESS);
     expect(result.toState).toBe(S.SUBMITTED);
 
-    expect(prismaMocks.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 10,
-        status: S.IN_PROGRESS,
-        deadline: { gt: expect.any(Date) },
-      },
-      data: {
-        status: S.SUBMITTED,
-      },
-    });
-
+    expect(prismaMocks.executeRaw).toHaveBeenCalledOnce();
+    expect(prismaMocks.updateMany).not.toHaveBeenCalled();
     expect(prismaMocks.createEvent).toHaveBeenCalledOnce();
   });
 
@@ -258,16 +303,8 @@ describe("transitionAttempt", () => {
     expect(result.fromState).toBe(S.CREATED);
     expect(result.toState).toBe(S.SUBMITTED);
 
-    expect(prismaMocks.updateMany).toHaveBeenCalledWith({
-      where: {
-        id: 10,
-        status: S.CREATED,
-        deadline: { lte: expect.any(Date) },
-      },
-      data: {
-        status: S.SUBMITTED,
-      },
-    });
+    expect(prismaMocks.executeRaw).toHaveBeenCalledOnce();
+    expect(prismaMocks.updateMany).not.toHaveBeenCalled();
 
     expect(prismaMocks.createEvent).toHaveBeenCalledWith({
       data: expect.objectContaining({
@@ -279,7 +316,7 @@ describe("transitionAttempt", () => {
 
   it("rejects a concurrent transition when the status changed", async () => {
     setupAttempt(makeAttempt());
-    prismaMocks.updateMany.mockResolvedValue({ count: 0 });
+    prismaMocks.executeRaw.mockResolvedValue(0);
 
     await expect(
       transitionAttempt({
@@ -306,10 +343,8 @@ describe("transitionAttempt", () => {
           type: "MANAGER",
           employeeId: 1,
         },
-        metadata: {
-          decision: "REJECTED",
-          reason: "   ",
-        },
+        decision: Decision.REJECTED,
+        decisionReason: "   ",
       }),
     ).rejects.toThrow("REJECTION_REASON_REQUIRED");
 
@@ -363,7 +398,7 @@ describe("transitionAttempt", () => {
       }),
     ).rejects.toThrow("EVENT_WRITE_FAILED");
 
-    expect(prismaMocks.updateMany).toHaveBeenCalledOnce();
+    expect(prismaMocks.executeRaw).toHaveBeenCalledOnce();
     expect(prismaMocks.createEvent).toHaveBeenCalledOnce();
   });
 
@@ -412,6 +447,100 @@ describe("transitionAttempt", () => {
     });
   });
 
+  it("rejects a final manager decision when the decision is missing", async () => {
+    setupAttempt(makeAttempt({ status: S.GRADED }));
+
+    await expect(
+      transitionAttempt({
+        attemptId: 10,
+        toState: S.DECIDED,
+        actor: {
+          type: "MANAGER",
+          employeeId: 1,
+        },
+      }),
+    ).rejects.toThrow("INVALID_MANAGER_DECISION");
+
+    expect(prismaMocks.updateMany).not.toHaveBeenCalled();
+    expect(prismaMocks.createEvent).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unsupported final manager decision", async () => {
+    setupAttempt(makeAttempt({ status: S.GRADED }));
+
+    await expect(
+      transitionAttempt({
+        attemptId: 10,
+        toState: S.DECIDED,
+        actor: {
+          type: "MANAGER",
+          employeeId: 1,
+        },
+        decision: "PENDING" as Decision,
+      }),
+    ).rejects.toThrow("INVALID_MANAGER_DECISION");
+
+    expect(prismaMocks.updateMany).not.toHaveBeenCalled();
+    expect(prismaMocks.createEvent).not.toHaveBeenCalled();
+  });
+
+  it("persists an approved final decision with no rejection reason", async () => {
+    setupAttempt(makeAttempt({ status: S.GRADED }));
+
+    const result = await transitionAttempt({
+      attemptId: 10,
+      toState: S.DECIDED,
+      actor: {
+        type: "MANAGER",
+        employeeId: 1,
+      },
+      decision: Decision.APPROVED,
+    });
+
+    expect(result.fromState).toBe(S.GRADED);
+    expect(result.toState).toBe(S.DECIDED);
+    expect(prismaMocks.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 10,
+        status: S.GRADED,
+      },
+      data: {
+        status: S.DECIDED,
+        decision: Decision.APPROVED,
+        decisionReason: null,
+      },
+    });
+    expect(prismaMocks.createEvent).toHaveBeenCalledOnce();
+  });
+
+  it("trims the reason before persisting a rejection", async () => {
+    setupAttempt(makeAttempt({ status: S.GRADED }));
+
+    await transitionAttempt({
+      attemptId: 10,
+      toState: S.DECIDED,
+      actor: {
+        type: "MANAGER",
+        employeeId: 1,
+      },
+      decision: Decision.REJECTED,
+      decisionReason: "  Evidence is insufficient.  ",
+    });
+
+    expect(prismaMocks.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 10,
+        status: S.GRADED,
+      },
+      data: {
+        status: S.DECIDED,
+        decision: Decision.REJECTED,
+        decisionReason: "Evidence is insufficient.",
+      },
+    });
+  });
+
+
   it("allows a manager to reject a graded attempt and records the reason", async () => {
     setupAttempt(
       makeAttempt({
@@ -426,10 +555,8 @@ describe("transitionAttempt", () => {
         type: "MANAGER",
         employeeId: 1,
       },
-      metadata: {
-        decision: "REJECTED",
-        reason: "The evidence does not meet the required standard.",
-      },
+      decision: Decision.REJECTED,
+      decisionReason: "The evidence does not meet the required standard.",
     });
 
     expect(result.fromState).toBe(S.GRADED);
@@ -442,6 +569,8 @@ describe("transitionAttempt", () => {
       },
       data: {
         status: S.DECIDED,
+        decision: Decision.REJECTED,
+        decisionReason: "The evidence does not meet the required standard.",
       },
     });
 
@@ -454,10 +583,7 @@ describe("transitionAttempt", () => {
           to: S.DECIDED,
           actorType: "MANAGER",
           actorId: 1,
-          metadata: {
-            decision: "REJECTED",
-            reason: "The evidence does not meet the required standard.",
-          },
+          metadata: {},
         },
       }),
     });

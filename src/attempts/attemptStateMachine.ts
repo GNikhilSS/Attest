@@ -1,6 +1,8 @@
 import {
   AttemptStatus,
-  type Prisma,
+  Decision,
+  Prisma,
+  type Prisma as PrismaTypes,
 } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -32,6 +34,8 @@ type TransitionInput = {
   attemptId: number;
   toState: AttemptStatus;
   actor: Actor;
+  decision?: Decision;
+  decisionReason?: string;
   metadata?: Record<string, unknown>;
 };
 
@@ -107,6 +111,8 @@ export async function transitionAttempt({
   attemptId,
   toState,
   actor,
+  decision,
+  decisionReason,
   metadata = {},
 }: TransitionInput) {
   return prisma.$transaction(async (tx) => {
@@ -144,12 +150,17 @@ export async function transitionAttempt({
       throw new Error("FORBIDDEN");
     }
 
-    // Validate deadline before preparing the update.
+    // Provide clear application-level deadline errors.
+    // The conditional SQL update below independently checks the
+    // deadline using PostgreSQL statement_timestamp().
     const validationTime = new Date();
 
     if (
       actor.type === "EMPLOYEE" &&
-      toState === AttemptStatus.SUBMITTED &&
+      (
+        toState === AttemptStatus.IN_PROGRESS ||
+        toState === AttemptStatus.SUBMITTED
+      ) &&
       attempt.deadline <= validationTime
     ) {
       throw new Error("DEADLINE_PASSED");
@@ -165,88 +176,129 @@ export async function transitionAttempt({
 
     // Manager decisions must include a valid outcome.
     if (toState === AttemptStatus.DECIDED) {
-      const decision = metadata.decision;
-
       if (
-        decision !== "APPROVED" &&
-        decision !== "REJECTED"
+        decision !== Decision.APPROVED &&
+        decision !== Decision.REJECTED
       ) {
         throw new Error("INVALID_MANAGER_DECISION");
       }
 
       if (
-        decision === "REJECTED" &&
-        (
-          typeof metadata.reason !== "string" ||
-          !metadata.reason.trim()
-        )
+        decision === Decision.REJECTED &&
+        !decisionReason?.trim()
       ) {
         throw new Error("REJECTION_REASON_REQUIRED");
       }
     }
 
-    // Recheck immediately before the conditional database update.
     const transitionTime = new Date();
+
+    const data: PrismaTypes.AttemptUpdateManyMutationInput = {
+      status: toState,
+
+      ...(toState === AttemptStatus.APPROVED &&
+      actor.type === "MANAGER"
+        ? { approvedById: actor.employeeId }
+        : {}),
+
+      ...(toState === AttemptStatus.IN_PROGRESS
+        ? { startTime: transitionTime }
+        : {}),
+
+      ...(toState === AttemptStatus.DECIDED
+        ? {
+            decision,
+            decisionReason:
+              decision === Decision.REJECTED
+                ? decisionReason!.trim()
+                : null,
+          }
+        : {}),
+    };
+
+    // Compare-and-set: the database update only succeeds if the
+    // attempt still has its original status.
+    let updatedCount: number;
 
     if (
       actor.type === "EMPLOYEE" &&
-      toState === AttemptStatus.SUBMITTED &&
-      attempt.deadline <= transitionTime
+      (
+        toState === AttemptStatus.IN_PROGRESS ||
+        toState === AttemptStatus.SUBMITTED
+      )
     ) {
-      throw new Error("DEADLINE_PASSED");
-    }
-
-    if (
+      updatedCount = await tx.$executeRaw`
+        UPDATE "Attempt"
+        SET
+          "status" = ${toState}::"AttemptStatus"
+          ${
+            toState === AttemptStatus.IN_PROGRESS
+              ? Prisma.sql`, "startTime" = ${transitionTime}`
+              : Prisma.empty
+          }
+        WHERE
+          "id" = ${attemptId}
+          AND "status" = ${fromState}::"AttemptStatus"
+          AND "deadline" > statement_timestamp()
+      `;
+    } else if (
       actor.type === "SERVER" &&
-      toState === AttemptStatus.SUBMITTED &&
-      attempt.deadline > transitionTime
+      toState === AttemptStatus.SUBMITTED
     ) {
-      throw new Error("DEADLINE_NOT_PASSED");
+      updatedCount = await tx.$executeRaw`
+        UPDATE "Attempt"
+        SET "status" = ${toState}::"AttemptStatus"
+        WHERE
+          "id" = ${attemptId}
+          AND "status" = ${fromState}::"AttemptStatus"
+          AND "deadline" <= statement_timestamp()
+      `;
+    } else {
+      const updated = await tx.attempt.updateMany({
+        where: {
+          id: attemptId,
+          status: fromState,
+        },
+        data,
+      });
+
+      updatedCount = updated.count;
     }
 
-    // Compare-and-set: require the original status to remain unchanged.
-    // Include the deadline condition for submission transitions too.
-    const deadlineCondition =
-      toState === AttemptStatus.SUBMITTED &&
-      actor.type === "EMPLOYEE"
-        ? { deadline: { gt: transitionTime } }
-        : toState === AttemptStatus.SUBMITTED &&
-            actor.type === "SERVER"
-          ? { deadline: { lte: transitionTime } }
-          : {};
+    if (updatedCount !== 1) {
+      const currentAttempt = await tx.attempt.findUnique({
+        where: { id: attemptId },
+        select: {
+          status: true,
+          deadline: true,
+        },
+      });
 
-    const updated = await tx.attempt.updateMany({
-      where: {
-        id: attemptId,
-        status: fromState,
-        ...deadlineCondition,
-      },
-      data: {
-        status: toState,
-        ...(toState === AttemptStatus.APPROVED &&
-        actor.type === "MANAGER"
-          ? { approvedById: actor.employeeId }
-          : {}),
-        ...(toState === AttemptStatus.IN_PROGRESS
-          ? { startTime: transitionTime }
-          : {}),
-      },
-    });
+      if (!currentAttempt) {
+        throw new Error("ATTEMPT_NOT_FOUND");
+      }
 
-    if (updated.count !== 1) {
-      // Distinguish deadline failures from other concurrent changes.
+      const databaseTime = await tx.$queryRaw<Array<{ now: Date }>>`
+        SELECT statement_timestamp() AS now
+      `;
+
+      const now = databaseTime[0]?.now ?? new Date();
+
       if (
-        toState === AttemptStatus.SUBMITTED &&
         actor.type === "EMPLOYEE" &&
-        attempt.deadline <= new Date()
+        (
+          toState === AttemptStatus.IN_PROGRESS ||
+          toState === AttemptStatus.SUBMITTED
+        ) &&
+        currentAttempt.deadline <= now
       ) {
         throw new Error("DEADLINE_PASSED");
       }
 
       if (
-        toState === AttemptStatus.SUBMITTED &&
         actor.type === "SERVER" &&
-        attempt.deadline > new Date()
+        toState === AttemptStatus.SUBMITTED &&
+        currentAttempt.deadline > now
       ) {
         throw new Error("DEADLINE_NOT_PASSED");
       }
@@ -254,7 +306,7 @@ export async function transitionAttempt({
       throw new Error("CONCURRENT_TRANSITION");
     }
 
-    // The status update and event must commit or roll back together.
+    // The state update and event creation remain in one transaction.
     await tx.attemptEvent.create({
       data: {
         attemptId,
@@ -273,7 +325,7 @@ export async function transitionAttempt({
               ? null
               : actor.employeeId,
           metadata,
-        } as Prisma.InputJsonValue,
+        } as PrismaTypes.InputJsonValue,
       },
     });
 
