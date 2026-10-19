@@ -4,6 +4,7 @@ import {
   Prisma,
   type Prisma as PrismaTypes,
 } from "../../generated/prisma/client.js";
+import { EXAM_WINDOW_MS } from "../lib/constants.js";
 import { prisma } from "../lib/prisma.js";
 
 type ActorType = "EMPLOYEE" | "MANAGER" | "SERVER";
@@ -214,6 +215,10 @@ export async function transitionAttempt({
                 : null,
           }
         : {}),
+
+      ...(toState === AttemptStatus.CREATED
+        ? { deadline: new Date(transitionTime.getTime() + EXAM_WINDOW_MS) }
+        : {})
     };
 
     // Compare-and-set: the database update only succeeds if the

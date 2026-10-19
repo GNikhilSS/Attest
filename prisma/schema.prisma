@@ -59,8 +59,9 @@ model Attempt {
   skillId Int
   proficiencyLevel Int
   status AttemptStatus
-  startTime DateTime
-  deadline DateTime
+  createdAt DateTime @default(now())
+  startTime DateTime?
+  deadline DateTime?
   decision Decision?
   decisionReason String?
 

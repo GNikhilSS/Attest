@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Attempt" ALTER COLUMN "startTime" DROP NOT NULL,
+ALTER COLUMN "deadline" DROP NOT NULL;
