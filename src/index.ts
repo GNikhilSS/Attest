@@ -1,7 +1,9 @@
 import express, { Router } from 'express';
 import type { Request, Response } from 'express';
 
+
 const app = express();
+
 
 app.use((req, res, next) => {
     const id = Number(req.header("x-employee-id"));
@@ -16,6 +18,7 @@ app.get('/', (req: Request, res: Response) => {
     res.json({works: 'works'});
 })
 
+
 app.post('/attempts/:id/open', async (req, res) => {
     const attemptId = Number(req.params.id);
     const callerId = res.locals.employeeId;
@@ -26,5 +29,6 @@ app.post('/attempts/:id/open', async (req, res) => {
 
     res.status(501).json({ todo: "open attempt", attemptId, callerId});
 })
+
 
 app.listen(3000, () => console.log('Server running at http://localhost:3000'));

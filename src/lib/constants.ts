@@ -1,0 +1,1 @@
+export const EXAM_WINDOW_MS = 2 * 24 * 60 * 60 * 1000;
