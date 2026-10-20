@@ -7,6 +7,7 @@ import {
 import { EXAM_WINDOW_MS } from "../lib/constants.js";
 import { prisma } from "../lib/prisma.js";
 
+// Types
 type ActorType = "EMPLOYEE" | "MANAGER" | "SERVER";
 
 type EmployeeActor = {
@@ -40,6 +41,7 @@ type TransitionInput = {
   metadata?: Record<string, unknown>;
 };
 
+// Allowed state transitions
 const transitionRules: TransitionRule[] = [
   {
     from: AttemptStatus.REQUESTED,
@@ -83,6 +85,7 @@ const transitionRules: TransitionRule[] = [
   },
 ];
 
+// Transition validation
 export function canTransition(
   from: AttemptStatus,
   to: AttemptStatus,
@@ -108,6 +111,141 @@ export function validateTransition(
   }
 }
 
+function validateActor(
+  actor: Actor,
+  attempt: {
+    employeeId: number;
+    attemptBy: {
+      managedById: number | null;
+    };
+  },
+): void {
+  if (
+    actor.type === "EMPLOYEE" &&
+    actor.employeeId !== attempt.employeeId
+  ) {
+    throw new Error("FORBIDDEN");
+  }
+
+  if (
+    actor.type === "MANAGER" &&
+    attempt.attemptBy.managedById !== actor.employeeId
+  ) {
+    throw new Error("FORBIDDEN");
+  }
+}
+
+function isEmployeeDeadlineTransition(
+  actor: Actor,
+  toState: AttemptStatus,
+): boolean {
+  return (
+    actor.type === "EMPLOYEE" &&
+    (
+      toState === AttemptStatus.IN_PROGRESS ||
+      toState === AttemptStatus.SUBMITTED
+    )
+  );
+}
+
+function validateDeadline(
+  actor: Actor,
+  toState: AttemptStatus,
+  deadline: Date,
+): void {
+  const now = new Date();
+
+  if (
+    isEmployeeDeadlineTransition(actor, toState) &&
+    deadline <= now
+  ) {
+    throw new Error("DEADLINE_PASSED");
+  }
+
+  if (
+    actor.type === "SERVER" &&
+    toState === AttemptStatus.SUBMITTED &&
+    deadline > now
+  ) {
+    throw new Error("DEADLINE_NOT_PASSED");
+  }
+}
+
+function validateDecision(
+  toState: AttemptStatus,
+  decision?: Decision,
+  decisionReason?: string,
+): void {
+  if (toState !== AttemptStatus.DECIDED) {
+    return;
+  }
+
+  if (
+    decision !== Decision.APPROVED &&
+    decision !== Decision.REJECTED
+  ) {
+    throw new Error("INVALID_MANAGER_DECISION");
+  }
+
+  if (
+    decision === Decision.REJECTED &&
+    !decisionReason?.trim()
+  ) {
+    throw new Error("REJECTION_REASON_REQUIRED");
+  }
+}
+
+// Database update helpers
+function buildUpdateData(
+  toState: AttemptStatus,
+  actor: Actor,
+  decision: Decision | undefined,
+  decisionReason: string | undefined,
+  transitionTime: Date,
+): PrismaTypes.AttemptUpdateManyMutationInput {
+  return {
+    status: toState,
+
+    ...(toState === AttemptStatus.APPROVED &&
+    actor.type === "MANAGER"
+      ? { approvedById: actor.employeeId }
+      : {}),
+
+    ...(toState === AttemptStatus.CREATED
+      ? {
+          deadline: new Date(
+            transitionTime.getTime() + EXAM_WINDOW_MS,
+          ),
+        }
+      : {}),
+
+    ...(toState === AttemptStatus.IN_PROGRESS
+      ? { startTime: transitionTime }
+      : {}),
+
+    ...(toState === AttemptStatus.DECIDED
+      ? {
+          ...(decision !== undefined ? { decision } : {}),
+          decisionReason:
+            decision === Decision.REJECTED
+              ? decisionReason!.trim()
+              : null,
+        }
+      : {}),
+  };
+}
+
+function isAutomaticSubmission(
+  fromState: AttemptStatus,
+  toState: AttemptStatus,
+): boolean {
+  return (
+    fromState === AttemptStatus.CREATED &&
+    toState === AttemptStatus.SUBMITTED
+  );
+}
+
+// Main transition function
 export async function transitionAttempt({
   attemptId,
   toState,
@@ -117,6 +255,7 @@ export async function transitionAttempt({
   metadata = {},
 }: TransitionInput) {
   return prisma.$transaction(async (tx) => {
+    // 1. Load the attempt and its manager relationship.
     const attempt = await tx.attempt.findUnique({
       where: { id: attemptId },
       include: {
@@ -135,103 +274,32 @@ export async function transitionAttempt({
 
     const fromState = attempt.status;
 
+    // 2. Validate the requested transition and actor.
     validateTransition(fromState, toState, actor.type);
+    validateActor(actor, attempt);
 
-    if (
-      actor.type === "EMPLOYEE" &&
-      actor.employeeId !== attempt.employeeId
-    ) {
-      throw new Error("FORBIDDEN");
-    }
-
-    if (
-      actor.type === "MANAGER" &&
-      attempt.attemptBy.managedById !== actor.employeeId
-    ) {
-      throw new Error("FORBIDDEN");
-    }
-
-    // Provide clear application-level deadline errors.
-    // The conditional SQL update below independently checks the
-    // deadline using PostgreSQL statement_timestamp().
-    const validationTime = new Date();
-
-    if (
-      actor.type === "EMPLOYEE" &&
-      (
-        toState === AttemptStatus.IN_PROGRESS ||
-        toState === AttemptStatus.SUBMITTED
-      ) &&
-      attempt.deadline <= validationTime
-    ) {
-      throw new Error("DEADLINE_PASSED");
-    }
-
-    if (
-      actor.type === "SERVER" &&
-      toState === AttemptStatus.SUBMITTED &&
-      attempt.deadline > validationTime
-    ) {
-      throw new Error("DEADLINE_NOT_PASSED");
-    }
-
-    // Manager decisions must include a valid outcome.
-    if (toState === AttemptStatus.DECIDED) {
-      if (
-        decision !== Decision.APPROVED &&
-        decision !== Decision.REJECTED
-      ) {
-        throw new Error("INVALID_MANAGER_DECISION");
-      }
-
-      if (
-        decision === Decision.REJECTED &&
-        !decisionReason?.trim()
-      ) {
-        throw new Error("REJECTION_REASON_REQUIRED");
-      }
-    }
+    // 3. Validate deadline and decision requirements.
+    validateDeadline(actor, toState, attempt.deadline);
+    validateDecision(toState, decision, decisionReason);
 
     const transitionTime = new Date();
 
-    const data: PrismaTypes.AttemptUpdateManyMutationInput = {
-      status: toState,
-
-      ...(toState === AttemptStatus.APPROVED &&
-      actor.type === "MANAGER"
-        ? { approvedById: actor.employeeId }
-        : {}),
-
-      ...(toState === AttemptStatus.IN_PROGRESS
-        ? { startTime: transitionTime }
-        : {}),
-
-      ...(toState === AttemptStatus.DECIDED
-        ? {
-            decision,
-            decisionReason:
-              decision === Decision.REJECTED
-                ? decisionReason!.trim()
-                : null,
-          }
-        : {}),
-
-      ...(toState === AttemptStatus.CREATED
-        ? { deadline: new Date(transitionTime.getTime() + EXAM_WINDOW_MS) }
-        : {})
-    };
+    // 4. Prepare fields that need updating for this transition.
+    const data = buildUpdateData(
+      toState,
+      actor,
+      decision,
+      decisionReason,
+      transitionTime,
+    );
 
     // Compare-and-set: the database update only succeeds if the
     // attempt still has its original status.
+    // 5. Perform a conditional update to prevent stale state changes.
+    // Deadline-sensitive transitions also check the deadline in SQL.
     let updatedCount: number;
 
-    if (
-      actor.type === "EMPLOYEE" &&
-      (
-        toState === AttemptStatus.IN_PROGRESS ||
-        toState === AttemptStatus.SUBMITTED
-      )
-    ) {
+    if (isEmployeeDeadlineTransition(actor, toState)) {
       updatedCount = await tx.$executeRaw`
         UPDATE "Attempt"
         SET
@@ -270,6 +338,7 @@ export async function transitionAttempt({
       updatedCount = updated.count;
     }
 
+    // 6. Explain why a conditional update did not succeed.
     if (updatedCount !== 1) {
       const currentAttempt = await tx.attempt.findUnique({
         where: { id: attemptId },
@@ -283,18 +352,16 @@ export async function transitionAttempt({
         throw new Error("ATTEMPT_NOT_FOUND");
       }
 
-      const databaseTime = await tx.$queryRaw<Array<{ now: Date }>>`
+      const databaseTime = await tx.$queryRaw<
+        Array<{ now: Date }>
+      >`
         SELECT statement_timestamp() AS now
       `;
 
       const now = databaseTime[0]?.now ?? new Date();
 
       if (
-        actor.type === "EMPLOYEE" &&
-        (
-          toState === AttemptStatus.IN_PROGRESS ||
-          toState === AttemptStatus.SUBMITTED
-        ) &&
+        isEmployeeDeadlineTransition(actor, toState) &&
         currentAttempt.deadline <= now
       ) {
         throw new Error("DEADLINE_PASSED");
@@ -311,15 +378,13 @@ export async function transitionAttempt({
       throw new Error("CONCURRENT_TRANSITION");
     }
 
-    // The state update and event creation remain in one transaction.
+    // 7. Record the state change in the same transaction.
     await tx.attemptEvent.create({
       data: {
         attemptId,
-        type:
-          fromState === AttemptStatus.CREATED &&
-          toState === AttemptStatus.SUBMITTED
-            ? "NOT_STARTED"
-            : "STATE_TRANSITION",
+        type: isAutomaticSubmission(fromState, toState)
+          ? "NOT_STARTED"
+          : "STATE_TRANSITION",
         serverTime: transitionTime,
         payload: {
           from: fromState,
@@ -334,6 +399,7 @@ export async function transitionAttempt({
       },
     });
 
+    // 8. Return a summary of the successful transition.
     return {
       attemptId,
       fromState,
