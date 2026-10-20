@@ -64,6 +64,7 @@ model Attempt {
   deadline DateTime?
   decision Decision?
   decisionReason String?
+  gradingReport GradingReport?
 
   attemptBy Employee @relation("AttemptBy",fields: [employeeId], references: [id])
   approvedBy Employee? @relation("ApprovedBy", fields: [approvedById], references: [id])
@@ -93,6 +94,8 @@ model Submission {
   submittedAnswer String
   isCorrect Boolean?
   submittedAt DateTime @default(now())
+  gradingStatus GradingStatus?
+  testResults   Json?
 
   attemptQuestion AttemptQuestion @relation(fields: [attemptId, questionId], references: [attemptId, questionId])
 }
@@ -107,6 +110,18 @@ model AttemptEvent {
   attempt   Attempt @relation(fields: [attemptId], references: [id])
 }
 
+model GradingReport {
+  id                Int      @id @default(autoincrement())
+  attemptId         Int      @unique
+  status GradingStatus @default(PENDING)
+  totalTestCases    Int      @default(0)
+  passedTestCases   Int      @default(0)
+  score             Int?
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+
+  attempt Attempt @relation(fields: [attemptId], references: [id])
+}
 enum QuestionType {
   SCRATCH
   DEBUG
@@ -131,4 +146,12 @@ enum AttemptStatus {
 enum Decision {
   APPROVED
   REJECTED
+}
+
+
+enum GradingStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
 }
