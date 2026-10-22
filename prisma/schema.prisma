@@ -99,6 +99,7 @@ model Submission {
   submittedAt DateTime @default(now())
   gradingStatus GradingStatus?
   testResults   Json?
+  isDraft Boolean @default(false)
 
   attemptQuestion AttemptQuestion @relation(fields: [attemptId, questionId], references: [attemptId, questionId])
 }
