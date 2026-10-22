@@ -48,6 +48,9 @@ export async function gradeAttempt(attemptId: number) {
             },
           },
           submissions: {
+            where: {
+              isDraft: false,
+            },
             orderBy: [
               { submittedAt: "desc" },
               { id: "desc" },
@@ -88,6 +91,7 @@ export async function gradeAttempt(attemptId: number) {
     });
   }
 
+  // Mark the report as RUNNING while grading is in progress.
   await prisma.gradingReport.upsert({
     where: { attemptId },
     create: {
@@ -117,7 +121,7 @@ export async function gradeAttempt(attemptId: number) {
       const testCases = question.testCases;
 
       // Submissions are sorted newest first.
-      // Only the latest submission for this question is graded.
+      // Only the latest non-draft submission for this question is graded.
       const latestSubmission = attemptQuestion.submissions[0];
 
       if (!latestSubmission) {

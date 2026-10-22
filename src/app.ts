@@ -3,12 +3,14 @@ import { loginRouter } from "./auth/auth.routes.js";
 import { verify } from "./auth/auth.middleware.js";
 import type { AuthedRequest } from "./auth/auth.types.js";
 import { attemptRouter } from "./attempts/attempts.routes.js";
+import { gradingRouter } from "./grading/grading.routes.js";
 
 const app = express();
 app.use(express.json());
 
 app.use("/auth", loginRouter);
 app.use("/attempts", verify, attemptRouter);
+app.use("/grading", verify, gradingRouter);
 
 
 app.get('/protected', verify, (req, res) => {
