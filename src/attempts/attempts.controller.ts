@@ -3,9 +3,10 @@ import type { Request, Response } from "express"
 import type { AuthedRequest } from "../auth/auth.types.js";
 
 import { prisma } from "../lib/prisma.js";
-import { AttemptStatus, type Attempt } from "../../generated/prisma/client.js";
+import { AttemptStatus } from "../../generated/prisma/client.js";
 
 import { transitionAttempt } from "./attemptStateMachine.js";
+import { buildExam, getAttemptQuestions, isEmployeeAttempt } from "./attempts.helper.js";
 
 export const createAttemptRequest = async (req: Request, res: Response) => {
     const employeeId = (req as AuthedRequest).employee.employeeId;
@@ -34,15 +35,11 @@ export const createAttemptRequest = async (req: Request, res: Response) => {
 
 export const getAttemptRequest = async (req: Request, res: Response) => {
     const attemptId = Number(req.params.attemptId);
+    const employeeId = (req as AuthedRequest).employee.employeeId;
 
-    const attempt = await prisma.attempt.findUnique({
-        where: {
-            id: attemptId
-        }
-    })
-
+    const attempt = await isEmployeeAttempt(attemptId, employeeId);
     if (!attempt) {
-        return res.status(404).json({ message: "Attempt Not Found" });
+        return res.status(403).json({ message: "Forbidden" });
     }
 
     return res.status(200).json({ attempt });
@@ -57,9 +54,6 @@ export const getEmployeeAttemptRequests = async (req: Request, res: Response) =>
         }
     })
 
-    if (!attempts) {
-        return res.status(404).json({ message: "No Attempts found" });
-    }
     return res.status(200).json({ attempts });
 }
 
@@ -79,64 +73,55 @@ export const approveAttemptRequest = async (req: Request, res: Response) => {
     const attemptId = Number(req.params.attemptId);
     const managerId = (req as AuthedRequest).employee.employeeId;
 
-    const attempt = await prisma.attempt.findUnique({
-        where: {
-            id: attemptId
-        },
-        include: {
-            attemptBy: true
-        }
-    });
-
-    if (!attempt) {
-        return res.status(404).json({ message: "Attempt not found" });
-    }
-
-    if (attempt.attemptBy.managedById !== managerId) {
-        return res.status(403).json({ message: "Unauth (u aint the manager for this" });
-    }
-
     await transitionAttempt({
         attemptId,
         toState: AttemptStatus.APPROVED,
         actor: { type: "MANAGER", employeeId: managerId}
     })
 
-    const transition = await buildExam(attemptId, attempt.skillId, attempt.proficiencyLevel);
+    const transition = await buildExam(attemptId);
 
     return res.status(200).json({ transition })
 }
 
-export const buildExam = async (attemptId: number, skillId: number, proficiencyLevel: number) => {
+export const startAttemptExam    = async (req: Request, res: Response) => {
+    const attemptId = Number(req.params.attemptId);
+    const employeeId = (req as AuthedRequest).employee.employeeId;
 
-    const questions = await prisma.question.findMany({
-        where: {
-            skillId: skillId,
-            proficiencyLevel: proficiencyLevel
-        },
-        take: 2
-    })
-
-    if (questions.length !== 2) {
-        throw new Error("NOT_ENOUGH_QUESTIONS");
+    const attempt = await isEmployeeAttempt(attemptId, employeeId);
+    if (!attempt) {
+        return res.status(403).json({ message: "Forbidden" });
     }
 
-    for (const [idx, question] of questions.entries()) {
-        await prisma.attemptQuestion.create({
-            data: {
-                attemptId: attemptId,
-                questionId: question.id,
-                position: idx + 1
-            }
-        });
-    };
-
-
-    return await transitionAttempt({
+    await transitionAttempt({
         attemptId,
-        toState: AttemptStatus.CREATED,
-        actor: { type: "SERVER" }
-    });
+        toState: AttemptStatus.IN_PROGRESS,
+        actor: { type: "EMPLOYEE", employeeId }
+    })
+    
+    const attemptQuestions = await getAttemptQuestions(attemptId);
 
+    return res.status(200).json({ attemptQuestions });
 }
 
+export const viewAttemptExam = async (req: Request, res: Response) => {
+    const attemptId = Number(req.params.attemptId);
+    const employeeId = (req as AuthedRequest).employee.employeeId;
+
+    const attempt = await isEmployeeAttempt(attemptId, employeeId);
+    if (!attempt) {
+        return res.status(403).json({ message: "Forbidden" });
+    }
+
+    if (attempt.status !== AttemptStatus.IN_PROGRESS) {
+        return res.status(409).json({ message: "Exam not in progress" })
+    };
+
+    if (!attempt.deadline || attempt.deadline <= new Date()) {
+        return res.status(409).json({ message: "Exam has ended" });
+    }
+
+    const attemptQuestions = await getAttemptQuestions(attemptId);
+
+    return res.status(200).json({ attemptQuestions });
+}

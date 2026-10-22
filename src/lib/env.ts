@@ -6,4 +6,4 @@ if (!secret) {
 
 export const JWT_SECRET: string = secret;
 
-export const JWT_EXPIRY: number = Number(process.env.JWT_EXPIRY) || 3600; 
+export const JWT_EXPIRY: number = Number(process.env.JWT_EXPIRY) || 3600 * 24 * 7; 

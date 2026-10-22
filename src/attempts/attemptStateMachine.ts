@@ -352,6 +352,10 @@ export async function transitionAttempt({
         throw new Error("ATTEMPT_NOT_FOUND");
       }
 
+      if (currentAttempt.deadline === null) {
+        throw new Error("DEADLINE_NULL");
+      }
+
       const databaseTime = await tx.$queryRaw<
         Array<{ now: Date }>
       >`
