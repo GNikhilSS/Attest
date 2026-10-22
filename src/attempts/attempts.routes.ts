@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validateInputBody, validateInputParams } from "../lib/middleware.js";
 import { AttemptCreationSchema } from "./attempts.schema.js";
-import { approveAttemptRequest, createAttemptRequest, getAttemptRequest, getEmployeeAttemptRequests, getManagerAttemptRequests } from "./attempts.controller.js";
+import { approveAttemptRequest, createAttemptRequest, getAttemptRequest, getEmployeeAttemptRequests, getManagerAttemptRequests, startAttemptExam, viewAttemptExam } from "./attempts.controller.js";
 
 export const attemptRouter = Router();
 
@@ -14,3 +14,7 @@ attemptRouter.get('/employee', getEmployeeAttemptRequests);
 attemptRouter.get('/manager', getManagerAttemptRequests);
 
 attemptRouter.post('/:attemptId/approve', approveAttemptRequest);
+
+attemptRouter.post('/:attemptId/start', startAttemptExam);
+
+attemptRouter.get('/:attemptId/view', viewAttemptExam);
