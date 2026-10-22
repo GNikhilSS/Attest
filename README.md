@@ -152,7 +152,6 @@ JUDGE0_LANGUAGE_ID="71" # e.g. 71 for Python (3.8.1), 63 for JavaScript (Node.js
 ```bash
 npm install
 npx prisma migrate dev
-npm run seed
 ```
 
 ### 3. Start the Server
