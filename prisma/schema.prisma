@@ -27,29 +27,32 @@ model Employee {
 model Skill {
   id Int @id @default(autoincrement())
   skillName String @unique
+
   questions Question[]
   attempts Attempt[]
 }
 
 model Question {
   id Int @id @default(autoincrement())
-  skill Skill @relation(fields: [skillId], references: [id])
   skillId Int
   proficiencyLevel Int
   questionType QuestionType
   questionContent String
   starterCode String?
+
+  skill Skill @relation(fields: [skillId], references: [id])
   testCases TestCase[]
   attemptQuestion AttemptQuestion[]
 }
 
 model TestCase {
   id Int @id @default(autoincrement())
-  question Question @relation(fields: [questionId], references: [id])
   questionId Int
   input String
   expectedOutput String
   visibility Visibility
+
+  question Question @relation(fields: [questionId], references: [id])
 }
 
 model Attempt {
@@ -117,11 +120,13 @@ model GradingReport {
   totalTestCases    Int      @default(0)
   passedTestCases   Int      @default(0)
   score             Int?
+  integritySummary Json?
   completedAt       DateTime?
   createdAt         DateTime @default(now())
 
   attempt Attempt @relation(fields: [attemptId], references: [id])
 }
+
 enum QuestionType {
   SCRATCH
   DEBUG
@@ -147,7 +152,6 @@ enum Decision {
   APPROVED
   REJECTED
 }
-
 
 enum GradingStatus {
   PENDING
