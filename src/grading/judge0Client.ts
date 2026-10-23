@@ -1,3 +1,5 @@
+import { executeLocalCode } from "./localRunner.js";
+
 export type Judge0SubmissionRequest = {
   source_code: string;
   language_id: number;
@@ -22,6 +24,11 @@ export type Judge0SubmissionResult = {
 };
 
 const REQUEST_TIMEOUT_MS = 10_000;
+const localResults = new Map<string, Judge0SubmissionResult>();
+
+function isLocalRunner(): boolean {
+  return process.env.JUDGE0_BASE_URL?.trim().toLowerCase() === "local";
+}
 
 function getBaseUrl(): string {
   const baseUrl = process.env.JUDGE0_BASE_URL;
@@ -42,6 +49,16 @@ function validatePositiveNumber(value: number, name: string): void {
 export async function submitCode(
   request: Judge0SubmissionRequest,
 ): Promise<Judge0SubmissionResponse> {
+  if (isLocalRunner()) {
+    const result = executeLocalCode(request);
+    localResults.set(result.token, result);
+    if (localResults.size > 500) {
+      const oldestKey = localResults.keys().next().value;
+      if (oldestKey) localResults.delete(oldestKey);
+    }
+    return { token: result.token };
+  }
+
   const baseUrl = getBaseUrl();
 
   const response = await fetch(
@@ -76,6 +93,14 @@ export async function getSubmissionResult(
 ): Promise<Judge0SubmissionResult> {
   if (!token.trim()) {
     throw new Error("Judge0 submission token is required");
+  }
+
+  if (isLocalRunner() || token.startsWith("local_")) {
+    const localResult = localResults.get(token);
+    if (!localResult) {
+      throw new Error(`Local submission not found: ${token}`);
+    }
+    return localResult;
   }
 
   const baseUrl = getBaseUrl();

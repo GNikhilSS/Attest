@@ -183,6 +183,19 @@ export async function gradeAttempt(attemptId: number) {
         ? Math.round((passedTestCases / totalTestCases) * 100)
         : null;
 
+    const events = await prisma.attemptEvent.findMany({
+      where: { attemptId },
+      select: { type: true },
+    });
+    const eventsByType: Record<string, number> = {};
+    for (const e of events) {
+      eventsByType[e.type] = (eventsByType[e.type] ?? 0) + 1;
+    }
+    const integritySummary = {
+      totalEvents: events.length,
+      eventsByType,
+    };
+
     // Save all grading results and complete the report atomically.
     await prisma.$transaction(async (tx) => {
       for (const grade of grades) {
@@ -204,6 +217,7 @@ export async function gradeAttempt(attemptId: number) {
           totalTestCases,
           passedTestCases,
           score,
+          integritySummary: integritySummary as unknown as Prisma.InputJsonValue,
           completedAt: new Date(),
         },
       });
