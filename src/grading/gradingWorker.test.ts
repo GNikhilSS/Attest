@@ -10,6 +10,7 @@ const prismaMock = vi.hoisted(() => {
       findUnique: vi.fn(),
     },
     submission: { update: vi.fn() },
+    attemptEvent: { findMany: vi.fn().mockResolvedValue([]) },
     $transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
       callback(mock),
     ),
@@ -88,6 +89,11 @@ describe("gradeAttempt", () => {
     };
 
     prismaMock.attempt.findUnique.mockResolvedValueOnce(mockAttempt);
+    prismaMock.attemptEvent.findMany.mockResolvedValueOnce([
+      { type: "TAB_SWITCH" },
+      { type: "TAB_SWITCH" },
+      { type: "COPY_PASTE" },
+    ]);
     prismaMock.gradingReport.findUnique.mockResolvedValueOnce({
       attemptId: 1,
       status: GradingStatus.COMPLETED,
@@ -103,6 +109,10 @@ describe("gradeAttempt", () => {
         data: expect.objectContaining({
           status: GradingStatus.COMPLETED,
           score: 100,
+          integritySummary: {
+            totalEvents: 3,
+            eventsByType: { TAB_SWITCH: 2, COPY_PASTE: 1 },
+          },
         }),
       }),
     );

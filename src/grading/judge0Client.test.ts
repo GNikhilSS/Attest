@@ -55,4 +55,48 @@ describe("judge0Client", () => {
     const res = await waitForSubmissionResult("tok_123", 5000, 100);
     expect(res).toEqual(mockResult);
   });
+
+  describe("local runner mode (JUDGE0_BASE_URL=local)", () => {
+    beforeEach(() => {
+      vi.stubEnv("JUDGE0_BASE_URL", "local");
+    });
+
+    it("executes JavaScript function and returns evaluation result", async () => {
+      const submission = await submitCode({
+        source_code: "function sum(arr) { return arr.reduce((a, b) => a + b, 0); }",
+        language_id: 63,
+        stdin: "[1, 2, 3]",
+      });
+
+      expect(submission.token).toMatch(/^local_/);
+
+      const result = await waitForSubmissionResult(submission.token);
+      expect(result.status.id).toBe(3);
+      expect(result.stdout).toBe("6");
+    });
+
+    it("handles JavaScript console.log output", async () => {
+      const submission = await submitCode({
+        source_code: "console.log('hello from test');",
+        language_id: 63,
+        stdin: "",
+      });
+
+      const result = await waitForSubmissionResult(submission.token);
+      expect(result.status.id).toBe(3);
+      expect(result.stdout).toBe("hello from test");
+    });
+
+    it("handles runtime errors gracefully", async () => {
+      const submission = await submitCode({
+        source_code: "foo.bar();",
+        language_id: 63,
+        stdin: "",
+      });
+
+      const result = await waitForSubmissionResult(submission.token);
+      expect(result.status.id).toBe(11); // Runtime Error
+      expect(result.stderr).toContain("foo is not defined");
+    });
+  });
 });
