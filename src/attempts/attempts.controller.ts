@@ -71,38 +71,23 @@ export const getManagerAttemptRequests = async (req: Request, res: Response) => 
 }
 
 export const approveAttemptRequest = async (req: Request, res: Response) => {
-    try {
-        const attemptId = Number(req.params.attemptId);
-        const managerId = (req as AuthedRequest).employee.employeeId;
+    const attemptId = Number(req.params.attemptId);
+    const managerId = (req as AuthedRequest).employee.employeeId;
 
-        if (!Number.isInteger(attemptId) || attemptId <= 0) {
-            return res.status(400).json({ message: "Invalid attempt ID" });
-        }
-
-        await transitionAttempt({
-            attemptId,
-            toState: AttemptStatus.APPROVED,
-            actor: { type: "MANAGER", employeeId: managerId}
-        });
-
-        const transition = await buildExam(attemptId);
-
-        return res.status(200).json({ transition });
-    } catch (error: any) {
-        const msg = error?.message || "";
-        if (msg === "ATTEMPT_NOT_FOUND") {
-            return res.status(404).json({ message: "Attempt not found" });
-        }
-        if (msg === "UNAUTHORIZED_MANAGER") {
-            return res.status(403).json({ message: "You are not the manager for this employee" });
-        }
-        if (msg.startsWith("INVALID_TRANSITION")) {
-            return res.status(409).json({ message: "Attempt cannot be approved in its current state" });
-        }
-        console.error("Approve attempt error:", error);
-        return res.status(500).json({ message: msg || "Failed to approve attempt" });
+    if (!Number.isInteger(attemptId) || attemptId <= 0) {
+        return res.status(400).json({ message: "Invalid attempt ID" });
     }
-}
+
+    await transitionAttempt({
+        attemptId,
+        toState: AttemptStatus.APPROVED,
+        actor: { type: "MANAGER", employeeId: managerId}
+    });
+
+    const transition = await buildExam(attemptId);
+
+    return res.status(200).json({ transition });
+};
 
 export const startAttemptExam    = async (req: Request, res: Response) => {
     const attemptId = Number(req.params.attemptId);

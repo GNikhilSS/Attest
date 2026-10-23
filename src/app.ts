@@ -1,11 +1,12 @@
 import "dotenv/config";
-import express, { type NextFunction, type Request, type Response } from "express";
+import express from "express";
 import { loginRouter } from "./auth/auth.routes.js";
 import { verify } from "./auth/auth.middleware.js";
 import type { AuthedRequest } from "./auth/auth.types.js";
 import { attemptRouter } from "./attempts/attempts.routes.js";
 import { gradingRouter } from "./grading/grading.routes.js";
 import { decisionsRouter } from "./decisions/decisions.routes.js";
+import { errorHandler } from "./lib/errors.js";
 
 const app = express();
 app.use(express.json());
@@ -34,10 +35,7 @@ app.get('/protected', verify, (req, res) => {
 })
 
 
-app.use("/",(err: unknown, req: Request, res: Response, next: NextFunction) => {
-    console.error(err)
-    return res.status(500).json({ message: "Server error" });
-})
+app.use(errorHandler);
 
 app.listen(3000, () => {
     console.log("Server listening on http://localhost:3000");
