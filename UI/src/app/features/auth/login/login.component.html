@@ -1,0 +1,29 @@
+<div class="auth-page">
+    <form class="auth-card" (ngSubmit)="onSubmit()">
+        <h1>Login In</h1>
+
+        <label for="">Employee ID</label>
+        <input 
+          id="employeeId"
+          type="number"
+          name="employeeId"
+          [(ngModel)]="employeeId"
+          placeholder="Enter your employee ID"
+          min="1"
+          required 
+        />
+
+        <p class="error-message" *ngIf="errorMessage" role="alert">
+            {{ errorMessage }}
+        </p>
+
+        <button type="submit" [disabled]="loading">
+            {{ loading ? 'Logging in...' : 'Log In' }}
+        </button>
+
+        <p class="auth-footer">
+            Register if no account
+            <a routerLink="/register">Register</a>
+        </p>
+    </form>
+</div>

@@ -20,7 +20,8 @@ const prismaMock = vi.hoisted(() => {
 
 vi.mock("../lib/prisma.js", () => ({ prisma: prismaMock }));
 
-vi.mock("./judge0Client.js", () => ({
+vi.mock("./judge0Client.js", async (importOriginal) => ({
+  ...await importOriginal<typeof import("./judge0Client.js")>(),
   submitCode: vi.fn().mockResolvedValue({ token: "tok_123" }),
   waitForSubmissionResult: vi.fn().mockResolvedValue({
     token: "tok_123",

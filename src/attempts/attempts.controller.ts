@@ -6,7 +6,7 @@ import { prisma } from "../lib/prisma.js";
 import { AttemptStatus } from "../../generated/prisma/client.js";
 
 import { transitionAttempt, transitionAttemptInTransaction } from "./attemptStateMachine.js";
-import { buildExam, getAttemptQuestions, isEmployeeAttempt } from "./attempts.helper.js";
+import { buildExam, getAttemptQuestions, isEmployeeAttempt, submitExamAfterDeadline } from "./attempts.helper.js";
 import { gradeAttempt } from "../grading/gradingWorker.js";
 
 export const createAttemptRequest = async (req: Request, res: Response) => {
@@ -46,12 +46,36 @@ export const getAttemptRequest = async (req: Request, res: Response) => {
     return res.status(200).json({ attempt });
 }
 
+export const removeAttemptRequest = async (req: Request, res: Response) => {
+    const employeeId = (req as AuthedRequest).employee.employeeId;
+    const attemptId = Number(req.params.attemptId);
+
+    const result = await prisma.attempt.deleteMany({
+        where: {
+            id: attemptId,
+            status: AttemptStatus.REQUESTED,
+            attemptBy: {
+                managedById: employeeId
+            }
+        }
+    })
+
+    if (result.count !== 1) {
+        return res.status(404).json({ message: "Attempt to delete not found"})
+    }
+
+    res.status(204).end();
+}
+
 export const getEmployeeAttemptRequests = async (req: Request, res: Response) => {
     const employeeId = (req as AuthedRequest).employee.employeeId;
 
     const attempts = await prisma.attempt.findMany({
         where: {
             employeeId
+        },
+        include: {
+            skill: true
         }
     })
 
@@ -64,6 +88,15 @@ export const getManagerAttemptRequests = async (req: Request, res: Response) => 
     const attempts = await prisma.attempt.findMany({
         where: {
             attemptBy: {managedById: managerId} 
+        },
+        include: {
+            skill: true,
+            attemptBy: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
         }
     })
 
@@ -165,7 +198,7 @@ export const recordAttemptEvent = async (req: Request, res: Response) => {
     return res.status(201).json({ event });
 }
 
-export const expireOverdueAttempts = async (_req: Request, res: Response) => {
+export const expireOverdueAttempts = async () => {
     const now = new Date();
     const overdueAttempts = await prisma.attempt.findMany({
         where: {
@@ -213,5 +246,5 @@ export const expireOverdueAttempts = async (_req: Request, res: Response) => {
         }
     }
 
-    return res.status(200).json({ expiredCount: expiredIds.length, expiredAttemptIds: expiredIds });
+    return { expiredCount: expiredIds.length, expiredAttemptIds: expiredIds };
 };

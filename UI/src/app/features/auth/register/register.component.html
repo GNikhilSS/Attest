@@ -1,0 +1,58 @@
+
+<div class="auth-page">
+  <form
+    class="auth-card"
+    (ngSubmit)="onSubmit()"
+    *ngIf="registeredEmployeeId === null"
+  >
+    <h1>Register</h1>
+    
+    <label for="employeeName">Employee name</label>
+    <input
+      id="employeeName"
+      type="text"
+      name="employeeName"
+      [(ngModel)]="employeeName"
+      placeholder="Enter your full name"
+      maxlength="100"
+      required
+    />
+
+    <p class="error-message" *ngIf="errorMessage" role="alert">
+      {{ errorMessage }}
+    </p>
+
+    <button type="submit" [disabled]="loading">
+      {{ loading ? 'Creating account...' : 'Register' }}
+    </button>
+
+    <p class="auth-footer">
+      Already registered?
+      <a routerLink="/login">Sign in</a>
+    </p>
+  </form>
+
+  <section
+    class="auth-card success-card"
+    *ngIf="registeredEmployeeId !== null"
+    aria-labelledby="success-heading"
+  >
+    <h1 id="success-heading">Registration successful!</h1>
+    <p class="subtitle">
+      Your account has been created. Keep your employee ID for future logins.
+    </p>
+
+    <div class="employee-id-box">
+      <span>Your Employee ID</span>
+      <strong>{{ registeredEmployeeId }}</strong>
+    </div>
+
+    <p class="id-reminder">
+      Make a note of this ID. You'll need it to sign in again.
+    </p>
+
+    <button type="button" (click)="continueToDashboard()">
+      Continue to Dashboard
+    </button>
+  </section>
+</div>

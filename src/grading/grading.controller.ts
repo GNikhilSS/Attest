@@ -4,7 +4,7 @@ import { AttemptStatus } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import { transitionAttemptInTransaction } from "../attempts/attemptStateMachine.js";
 import { gradeAttempt } from "./gradingWorker.js";
-import { submitCode, waitForSubmissionResult } from "./judge0Client.js";
+import { getConfiguredLanguageId, submitCode, waitForSubmissionResult } from "./judge0Client.js";
 
 // Validates attempt ID and checks ownership by the authenticated employee
 async function getAttempt(req: Request, res: Response, questionId?: number) {
@@ -60,10 +60,7 @@ export const runCode = async (req: Request, res: Response) => {
       return res.status(409).json({ message: "Attempt is not in progress" });
     }
 
-    const languageId = Number(process.env.JUDGE0_LANGUAGE_ID);
-    if (!Number.isInteger(languageId) || languageId <= 0) {
-      throw new Error("JUDGE0_LANGUAGE_ID is not configured correctly");
-    }
+    const languageId = getConfiguredLanguageId();
 
     const submission = await submitCode({
       source_code: sourceCode,

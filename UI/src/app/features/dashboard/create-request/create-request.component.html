@@ -1,0 +1,63 @@
+
+<section class="request-form">
+  <h2 id="create-request-title">Create Skill Request</h2>
+  <p>Select the skill you want to be assessed on.</p>
+
+  <form (ngSubmit)="submitRequest()" #requestForm="ngForm">
+    <div class="form-field">
+      <label for="skill">Skill</label>
+
+      <select
+        id="skill"
+        name="skill"
+        [(ngModel)]="selectedSkillId"
+        required
+        [disabled]="loadingSkills || skills.length === 0"
+      >
+        <option [ngValue]="null" disabled>Select a skill</option>
+
+        <option *ngFor="let skill of skills" [ngValue]="skill.id">
+          {{ skill.skillName }}
+        </option>
+      </select>
+    </div>
+
+    <div class="form-field">
+      <label for="level">Proficiency Level</label>
+
+      <select
+        id="level"
+        name="level"
+        [(ngModel)]="proficiencyLevel"
+        required
+      >
+        <option [ngValue]="1">Level 1</option>
+        <option [ngValue]="2">Level 2</option>
+        <option [ngValue]="3">Level 3</option>
+        <option [ngValue]="4">Level 4</option>
+        <option [ngValue]="5">Level 5</option>
+      </select>
+    </div>
+
+    <p *ngIf="loadingSkills">Loading skills...</p>
+
+    <p *ngIf="errorMessage" class="error-message" role="alert">
+      {{ errorMessage }}
+    </p>
+
+    <p *ngIf="!loadingSkills && !errorMessage && skills.length === 0">
+      No skills are currently available.
+    </p>
+
+    <p *ngIf="submitError" class="error-message" role="alert">
+      {{ submitError }}
+    </p>
+
+    <button
+      type="submit"
+      [disabled]="requestForm.invalid || loadingSkills || loadingSubmit || skills.length === 0"
+    >
+      {{ loadingSubmit ? 'Submitting...' : 'Create Request' }}
+    </button>
+  </form>
+</section>

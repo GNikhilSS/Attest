@@ -2,30 +2,34 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../generated/prisma/client.js";
 
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error("DATABASE_URL is not configured");
+}
+
+const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  // Two managers with no manager of their own.
-  const priya = await prisma.employee.create({ data: { name: "Priya Sharma" } });
-  const arjun = await prisma.employee.create({ data: { name: "Arjun Mehta" } });
-
-  // Employees reporting to each manager.
-  await prisma.employee.createMany({
-    data: [
-      { name: "Ravi Kumar", managedById: priya.id },
-      { name: "Sneha Iyer", managedById: priya.id },
-      { name: "Vikram Rao", managedById: arjun.id },
-      { name: "Anita Das", managedById: arjun.id },
-    ],
+  const manager = await prisma.employee.create({
+    data: {
+      name: "POC Manager",
+      reports: {
+        create: { name: "POC Employee" },
+      },
+    },
+    include: { reports: true },
   });
 
-  console.log("Employees added.");
+  console.log(`Manager login ID: ${manager.id} (${manager.name})`);
+  for (const employee of manager.reports) {
+    console.log(`Employee login ID: ${employee.id} (${employee.name}), managed by ${manager.id}`);
+  }
 }
 
 main()
   .catch((e) => {
     console.error(e);
-    process.exit(1);
+    process.exitCode = 1;
   })
   .finally(() => prisma.$disconnect());

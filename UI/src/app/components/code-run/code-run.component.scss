@@ -1,0 +1,8 @@
+:host { display: block; margin-top: 24px; }
+.container { padding: 20px; background: #f8fafc; border: 1px solid #e2e6ec; border-radius: 8px; }
+h5 { font-size: 14px; margin: 0 0 8px; }
+.mb-3 + .mb-3 { margin-top: 20px; }
+.text-danger { color: #b42318; }
+.text-success { color: #067647; }
+.text-warning { color: #854a0e; }
+pre { min-height: 44px; margin: 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; overflow: auto; border: 1px solid #e2e6ec; border-radius: 6px; background: white; color: #172033; }

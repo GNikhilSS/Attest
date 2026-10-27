@@ -1,0 +1,57 @@
+@if (submissionResult() && submissionResult().length > 0) {
+  <div class="mt-3">
+    <div class="card p-3 mb-3">
+      <h5 class="card-title">Submission Details</h5>
+      <p class="mb-1">
+        <strong>Code:</strong>
+        <code class="mt-3">
+          <pre>{{ submittedCode() }}</pre>
+        </code>
+      </p>
+      <p class="mb-1"><strong>Language:</strong> {{ language() }}</p>
+    </div>
+
+    @for (test of submissionResult(); track $index; let idx = $index) {
+      <div class="card mb-3 shadow-sm">
+        <div class="card-body">
+          <h6 class="card-subtitle mb-2 text-muted">Test Case {{ idx + 1 }}</h6>
+
+          <p class="mb-1"><strong>Input:</strong></p>
+          <pre
+            class="bg-light p-2 border rounded"
+          ><code>{{ question().testCases[idx].input }}</code></pre>
+
+          <p class="mb-1">
+            <strong>Expected output:</strong>
+            <span class="mx-3 text-monospace">{{
+              question().testCases[idx].expectedOutput
+            }}</span>
+          </p>
+
+          <p class="mb-1">
+            <strong>Output:</strong>
+            <span class="mx-3 text-monospace">{{ test.stdout }}</span>
+          </p>
+
+          <p class="mb-0">
+            <strong>Status:</strong>
+            <span
+              class="mx-3 badge"
+              [ngClass]="{
+                'bg-success': test.status.id === 3,
+                'bg-danger': test.status.id === 4,
+                'bg-secondary': test.status.id !== 3 && test.status.id !== 4,
+              }"
+            >
+              {{ test.status.description }}
+            </span>
+          </p>
+        </div>
+      </div>
+    }
+  </div>
+} @else {
+  <div class="alert alert-warning mt-3 text-center">
+    No submission results to display.
+  </div>
+}

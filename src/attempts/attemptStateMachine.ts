@@ -3,7 +3,6 @@ import {
   Decision,
   Prisma,
   type Prisma as PrismaTypes,
-  type PrismaClient,
 } from "../../generated/prisma/client.js";
 import { EXAM_WINDOW_MS } from "../lib/constants.js";
 import { prisma } from "../lib/prisma.js";

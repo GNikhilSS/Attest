@@ -6,6 +6,7 @@ import {
 
 import { prisma } from "../lib/prisma.js";
 import {
+  getConfiguredLanguageId,
   submitCode,
   waitForSubmissionResult,
 } from "./judge0Client.js";
@@ -27,14 +28,7 @@ type SubmissionGrade = {
 };
 
 export async function gradeAttempt(attemptId: number) {
-  const configuredLanguageId = Number(process.env.JUDGE0_LANGUAGE_ID);
-
-  if (
-    !Number.isInteger(configuredLanguageId) ||
-    configuredLanguageId <= 0
-  ) {
-    throw new Error("JUDGE0_LANGUAGE_ID is not configured correctly");
-  }
+  const configuredLanguageId = getConfiguredLanguageId();
 
   const attempt = await prisma.attempt.findUnique({
     where: { id: attemptId },

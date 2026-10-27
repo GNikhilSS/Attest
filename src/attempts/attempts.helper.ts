@@ -89,3 +89,16 @@ export const getAttemptQuestions = async (attemptId: number) => {
 
     return attemptQuestions;
 }
+
+export const submitExamAfterDeadline = async (attemptId: number) => {
+
+    const updatedAttempt = await transitionAttempt({
+            attemptId: attemptId,
+            toState: AttemptStatus.SUBMITTED,
+            actor: { type: "SERVER" },
+            metadata: { reason: "DEADLINE_EXPIRED" },
+        }
+    )
+
+    return updatedAttempt;
+}

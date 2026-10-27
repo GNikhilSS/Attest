@@ -129,6 +129,12 @@ All protected endpoints require an `Authorization: Bearer <token>` header obtain
 | `GET` | `/decisions/:attemptId` | Manager | View full attempt details, grading report, integrity events, and candidate code. |
 | `POST` | `/decisions/:attemptId` | Manager | Submit decision (`APPROVED` or `REJECTED`). Body: `{ decision, decisionReason? }` |
 
+In the `UI` app, open **Your Managees' Requests**, select a submitted, graded, or decided
+attempt, and choose **View Grading Report**. The manager review page shows grading
+status, score, submitted code, visible/hidden-A test results, and integrity counts.
+Use **Refresh report** while grading is pending. Managers can approve or reject a
+`GRADED` attempt; rejection requires a reason. Decided attempts are read-only.
+
 ---
 
 ##  Database Model (PostgreSQL + Prisma)
@@ -165,6 +171,10 @@ JUDGE0_BASE_URL="local"
 JUDGE0_LANGUAGE_ID="63" # 63 for JavaScript (Node.js), 71 for Python (3.8.1)
 ```
 
+When `JUDGE0_BASE_URL="local"`, an unset or blank `JUDGE0_LANGUAGE_ID` defaults to `63`
+for both code runs and grading. The local runner executes JavaScript only.
+Remote Judge0 requires an explicit positive integer language ID.
+
 ### 2. Install Dependencies & Setup Database
 ```bash
 npm install
@@ -172,6 +182,11 @@ npx prisma migrate dev
 ```
 
 ### 3. Start the Server
+
+To add two POC accounts (one manager and one direct report) without deleting existing
+data, run `npm run seed:employees`. It prints both employee IDs for the dev login.
+The pair is created atomically; each run adds a new pair.
+
 ```bash
 npx tsx src/app.ts
 ```

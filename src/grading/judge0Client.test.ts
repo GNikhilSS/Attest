@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  getConfiguredLanguageId,
   isSubmissionProcessing,
   submitCode,
   waitForSubmissionResult,
@@ -19,6 +20,30 @@ describe("judge0Client", () => {
     expect(isSubmissionProcessing(1)).toBe(true); // In Queue
     expect(isSubmissionProcessing(2)).toBe(true); // Processing
     expect(isSubmissionProcessing(3)).toBe(false); // Accepted
+  });
+
+  describe("language configuration", () => {
+    it.each([undefined, "", "   "])("defaults to JavaScript locally when the ID is %s", (value) => {
+      vi.stubEnv("JUDGE0_BASE_URL", " LOCAL ");
+      vi.stubEnv("JUDGE0_LANGUAGE_ID", value);
+      expect(getConfiguredLanguageId()).toBe(63);
+    });
+
+    it("preserves an explicitly configured language ID", () => {
+      vi.stubEnv("JUDGE0_LANGUAGE_ID", "71");
+      expect(getConfiguredLanguageId()).toBe(71);
+    });
+
+    it("requires a language ID for remote Judge0", () => {
+      vi.stubEnv("JUDGE0_LANGUAGE_ID", undefined);
+      expect(() => getConfiguredLanguageId()).toThrow("JUDGE0_LANGUAGE_ID is not configured correctly");
+    });
+
+    it.each(["invalid", "0", "-1", "1.5"])("rejects an invalid local language ID: %s", (value) => {
+      vi.stubEnv("JUDGE0_BASE_URL", "local");
+      vi.stubEnv("JUDGE0_LANGUAGE_ID", value);
+      expect(() => getConfiguredLanguageId()).toThrow("JUDGE0_LANGUAGE_ID is not configured correctly");
+    });
   });
 
   it("submits code and returns token", async () => {

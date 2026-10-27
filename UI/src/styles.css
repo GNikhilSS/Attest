@@ -1,0 +1,25 @@
+:root {
+  color-scheme: light;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: #172033;
+  background: #f5f7fa;
+  line-height: 1.5;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+app-root { display: block; min-height: 100vh; }
+button, input, select, textarea { font: inherit; }
+button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
+button { transition: background-color 120ms ease, border-color 120ms ease; }
+button:disabled { opacity: .6; cursor: not-allowed; }
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 3px solid #93b4fa;
+  outline-offset: 3px;
+}
+a { color: #2563eb; text-underline-offset: 3px; }
+a:hover { color: #1d4ed8; }
+h1, h2, h3, h4, h5 { line-height: 1.25; letter-spacing: -.02em; }
+pre, code { font-family: Consolas, "Courier New", monospace; font-size: .9rem; }
+textarea { resize: vertical; }
+::selection { background: #dbeafe; color: #172033; }

@@ -1,0 +1,285 @@
+
+<div class="dashboard">
+  <header class="dashboard-header">
+    <div>
+      <h1>Skill Verification</h1>
+      <p>Manage your skill assessment requests.</p>
+    </div>
+
+    <div class="header-actions">
+      <button
+        type="button"
+        class="secondary-button"
+        (click)="logout()"
+      >
+        Logout
+      </button>
+      
+      <button
+        type="button"
+        class="primary-button"
+        (click)="openCreateRequest()"
+      >
+        + Create Request
+      </button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Request categories">
+    <button
+      type="button"
+      [class.active]="activeTab === 'employee'"
+      [attr.aria-selected]="activeTab === 'employee'"
+      role="tab"
+      (click)="setTab('employee')"
+    >
+      Your Requests
+    </button>
+
+    <button
+      type="button"
+      [class.active]="activeTab === 'manager'"
+      [attr.aria-selected]="activeTab === 'manager'"
+      role="tab"
+      (click)="setTab('manager')"
+    >
+      Your Managees' Requests
+    </button>
+  </nav>
+
+  <section *ngIf="activeTab === 'employee'">
+    <p *ngIf="loadingEmployee">Loading your requests...</p>
+    <p *ngIf="employeeError" class="error-message" role="alert">
+      {{ employeeError }}
+    </p>
+
+    <div *ngIf="!loadingEmployee && !employeeError">
+      <p *ngIf="employeeAttempts.length === 0" class="empty-state">
+        You don't have any requests yet.
+      </p>
+
+      <div class="attempt-list">
+        <article 
+          class="attempt-card" 
+          *ngFor="let attempt of employeeAttempts"
+          (click)="openAttemptDetails(attempt)"
+          (keydown.enter)="openAttemptDetails(attempt)"
+          tabindex="0"
+          role="button"
+          [attr.aria-label]="'View details for ' + attempt.skill.skillName + ' request'"  
+        >
+          <div>
+            <h2>{{ attempt.skill.skillName }}</h2>
+            <p>Level {{ attempt.proficiencyLevel }}</p>
+            <p>Request #{{ attempt.id }}</p>
+          </div>
+
+          <span class="status-badge">{{ attempt.status }}</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'manager'">
+    <p *ngIf="loadingManager">Loading managees' requests...</p>
+    <p *ngIf="managerError" class="error-message" role="alert">
+      {{ managerError }}
+    </p>
+
+    <div *ngIf="!loadingManager && !managerError">
+      <p *ngIf="managerAttempts.length === 0" class="empty-state">
+        Your managees don't have any requests yet.
+      </p>
+
+      <div class="attempt-list">
+        <article 
+          class="attempt-card" 
+          *ngFor="let attempt of managerAttempts"
+          (click)="openAttemptDetails(attempt)"
+          (keydown.enter)="openAttemptDetails(attempt)"
+          tabindex="0"
+          role="button"
+          [attr.aria-label]="'View details for ' + attempt.skill.skillName + ' request'" 
+        >
+          <div>
+            <h2>{{ attempt.skill.skillName }}</h2>
+            <p>Employee: {{ attempt.attemptBy?.name ?? 'Unknown' }}</p>
+            <p>Level {{ attempt.proficiencyLevel }}</p>
+            <p>Request #{{ attempt.id }}</p>
+          </div>
+
+          <span class="status-badge">{{ attempt.status }}</span>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <div
+    class="modal-backdrop"
+    *ngIf="isCreateRequestOpen"
+    (click)="closeCreateRequest()"
+  >
+    <section
+      class="modal-content"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-request-title"
+      (click)="$event.stopPropagation()"
+    >
+      <button
+        type="button"
+        class="modal-close"
+        aria-label="Close create request dialog"
+        (click)="closeCreateRequest()"
+      >
+        &times;
+      </button>
+
+      <app-create-request
+        (requestCreated)="onRequestCreated()"
+      ></app-create-request>
+    </section>
+  </div>
+
+  
+  <div
+    class="modal-backdrop"
+    *ngIf="selectedAttempt as attempt"
+    (click)="closeAttemptDetails()"
+  >
+    <section
+      class="modal-content attempt-details-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="attempt-details-title"
+      (click)="$event.stopPropagation()"
+    >
+      <button
+        type="button"
+        class="modal-close"
+        aria-label="Close attempt details"
+        (click)="closeAttemptDetails()"
+      >
+        &times;
+      </button>
+
+      <h2 id="attempt-details-title">
+        {{ attempt.skill.skillName }}
+      </h2>
+
+      <p>Request #{{ attempt.id }}</p>
+
+      <div class="detail-row">
+        <span>Proficiency level</span>
+        <strong>Level {{ attempt.proficiencyLevel }}</strong>
+      </div>
+
+      <div class="detail-row">
+        <span>Status</span>
+        <strong>{{ attempt.status }}</strong>
+      </div>
+
+      <div class="detail-row">
+        <span>Requested on</span>
+        <strong>{{ attempt.createdAt | date:'mediumDate' }}</strong>
+      </div>
+
+      <div *ngIf="activeTab === 'manager' && attempt.attemptBy">
+        <div class="detail-row">
+          <span>Employee</span>
+          <strong>{{ attempt.attemptBy.name }}</strong>
+        </div>
+      </div>
+
+      <div *ngIf="attempt.decision">
+        <div class="detail-row">
+          <span>Decision</span>
+          <strong>{{ attempt.decision }}</strong>
+        </div>
+      </div>
+
+      <div *ngIf="attempt.decisionReason">
+        <h3>Decision reason</h3>
+        <p>{{ attempt.decisionReason }}</p>
+      </div>
+
+      <div class="detail-actions">
+
+        <button
+          *ngIf="activeTab === 'employee' && canTakeExam(attempt)"
+          type="button"
+          class="primary-button"
+          (click)="openExam(attempt)"
+        >
+          Take Exam
+        </button>
+
+        <button
+          *ngIf="activeTab === 'employee' && canResumeExam(attempt)"
+          type="button"
+          class="primary-button"
+          (click)="openExam(attempt)"
+        >
+          Resume Exam
+        </button>
+
+        <button
+          *ngIf="activeTab === 'manager' && attempt.status === 'REQUESTED'"
+          type="button"
+          class="primary-button"
+          [disabled]="approvingAttemptLoading"
+          (click)="approveRequest(attempt)"
+        >
+          {{ approvingAttemptLoading ? 'Approving...' : 'Approve Request' }}
+        </button>
+
+        <p
+          *ngIf="approvalError"
+          class="error-message"
+          role="alert"
+        >
+          {{ approvalError }}
+        </p>
+
+        <button
+          *ngIf="activeTab === 'manager' &&
+                (attempt.status === 'SUBMITTED' || attempt.status === 'GRADED' || attempt.status === 'DECIDED')"
+          type="button"
+          class="primary-button"
+          (click)="openGradingReport(attempt)"
+        >
+          View Grading Report
+        </button>
+
+
+        <button
+          *ngIf="activeTab === 'manager' && attempt.status === 'REQUESTED'"
+          type="button"
+          class="danger-button"
+          [disabled]="deleteAttemptLoading"
+          (click)="deleteRequest(attempt)"
+        >
+          {{ deleteAttemptLoading ? 'Deleting...' : 'Delete Request' }}
+        </button>
+
+        <p
+          *ngIf="deleteError"
+          class="error-message"
+          role="alert"
+        >
+          {{ deleteError }}
+        </p>
+
+        <button
+          type="button"
+          class="secondary-button"
+          (click)="closeAttemptDetails()"
+        >
+          Close
+        </button>
+
+      </div>
+    </section>
+  </div>
+
+</div>

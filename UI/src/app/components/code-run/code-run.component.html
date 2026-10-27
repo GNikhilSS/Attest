@@ -1,0 +1,22 @@
+@let output = this.codeRunOutput();
+@if (output) {
+  <div class="container bg-dark text-white p-4 rounded shadow-sm mt-4">
+    @if (hasErrorCompilation()) {
+      <div class="mb-3">
+        <h5 class="text-danger">Compile Errors</h5>
+        <pre class="bg-light text-dark p-3 rounded overflow-auto">{{
+          output.compileOutput
+        }}</pre>
+      </div>
+    } @else {
+      <div class="mb-3">
+        <h5 class="text-success">Stdout</h5>
+        <pre class="bg-light text-dark p-3 rounded">{{ output.stdout }}</pre>
+      </div>
+      <div class="mb-3">
+        <h5 class="text-warning">Stderr</h5>
+        <pre class="bg-light text-dark p-3 rounded">{{ output.stderr }}</pre>
+      </div>
+    }
+  </div>
+}

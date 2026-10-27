@@ -1,0 +1,115 @@
+<main class="review-page">
+  <header>
+    <div>
+      <a routerLink="/dashboard">Back to dashboard</a>
+      <h1>Attempt grading review</h1>
+      <p>Review the automated results before making your final decision.</p>
+    </div>
+    <button type="button" (click)="loadReport()" [disabled]="loading || saving">Refresh report</button>
+  </header>
+
+  <p *ngIf="loading" role="status">Loading grading report...</p>
+  <p *ngIf="error" class="error" role="alert">{{ error }}</p>
+  <p *ngIf="success" class="success" role="status">{{ success }}</p>
+
+  <ng-container *ngIf="attempt && !loading && !error">
+    <section class="panel" aria-labelledby="attempt-heading">
+      <h2 id="attempt-heading">{{ attempt.skill.skillName }} / Level {{ attempt.proficiencyLevel }}</h2>
+      <p>Attempt #{{ attempt.id }} · {{ attempt.attemptBy?.name }}</p>
+      <dl class="metrics">
+        <div><dt>Attempt status</dt><dd>{{ attempt.status }}</dd></div>
+        <div><dt>Started</dt><dd>{{ (attempt.startTime | date:'medium') || 'Not started' }}</dd></div>
+        <div><dt>Deadline</dt><dd>{{ (attempt.deadline | date:'medium') || 'Not set' }}</dd></div>
+      </dl>
+    </section>
+
+    <section class="panel" aria-labelledby="grading-heading">
+      <h2 id="grading-heading">Automated grading</h2>
+      <ng-container *ngIf="attempt.gradingReport as report; else noReport">
+        <dl class="metrics">
+          <div><dt>Grading status</dt><dd>{{ report.status }}</dd></div>
+          <div><dt>Score</dt><dd>{{ report.score === null ? 'Not available' : report.score + '%' }}</dd></div>
+          <div><dt>Tests passed</dt><dd>{{ report.passedTestCases }} / {{ report.totalTestCases }}</dd></div>
+          <div><dt>Completed</dt><dd>{{ (report.completedAt | date:'medium') || 'Not completed' }}</dd></div>
+        </dl>
+        <p *ngIf="report.status === 'FAILED'" class="error" role="alert">
+          Grading failed. A backend grading retry is needed before a decision can be made.
+        </p>
+        <p *ngIf="report.status === 'PENDING' || report.status === 'RUNNING'" role="status">
+          Grading is in progress. Refresh this report to check for results.
+        </p>
+      </ng-container>
+      <ng-template #noReport><p>No grading report is available yet. Refresh after grading completes.</p></ng-template>
+    </section>
+
+    <!-- <section class="panel" aria-labelledby="integrity-heading">
+      <h2 id="integrity-heading">Integrity summary</h2>
+      <ng-container *ngIf="attempt.gradingReport?.integritySummary as summary; else noIntegrity">
+        <p>{{ summary.totalEvents }} recorded events, including lifecycle transitions.</p>
+        <dl class="metrics">
+          <div *ngFor="let event of summary.eventsByType | keyvalue">
+            <dt>{{ event.key }}</dt><dd>{{ event.value }}</dd>
+          </div>
+        </dl>
+        <p class="muted">Signals are evidence for review, not an automatic pass or fail verdict.</p>
+      </ng-container>
+      <ng-template #noIntegrity><p>No integrity summary is available.</p></ng-template>
+    </section> -->
+
+    <section class="panel" aria-labelledby="answers-heading">
+      <h2 id="answers-heading">Submitted answers</h2>
+      <p *ngIf="attempt.questions.length === 0">No questions are attached to this attempt.</p>
+      <article *ngFor="let item of attempt.questions" class="answer">
+        <h3>Question {{ item.position }} <span class="muted">/ {{ item.question.questionType }}</span></h3>
+        <p class="question">{{ item.question.questionContent }}</p>
+        <ng-container *ngIf="item.submissions[0] as submission; else unanswered">
+          <p class="muted">Submitted {{ submission.submittedAt | date:'medium' }}</p>
+          <pre><code>{{ submission.submittedAnswer }}</code></pre>
+          <div class="table-scroll" *ngIf="visibleResults(submission.testResults).length">
+            <table>
+              <caption>Test results for question {{ item.position }}</caption>
+              <thead><tr><th>Test</th><th>Visibility</th><th>Result</th><th>Status</th><th>Actual output</th></tr></thead>
+              <tbody>
+                <tr *ngFor="let result of visibleResults(submission.testResults)">
+                  <td>#{{ result.testCaseId }}</td><td>{{ result.visibility }}</td>
+                  <td [class.error]="!result.passed">{{ result.passed ? 'Passed' : 'Failed' }}</td>
+                  <td>{{ result.status }}</td>
+                  <td>{{ result.visibility === 'VISIBLE' ? (result.actualOutput ?? 'No output') : 'Hidden' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </ng-container>
+        <ng-template #unanswered><p>No final answer was submitted for this question.</p></ng-template>
+      </article>
+    </section>
+
+    <section class="panel" aria-labelledby="decision-heading">
+      <h2 id="decision-heading">Manager decision</h2>
+      <ng-container *ngIf="attempt.status === 'DECIDED'; else decisionForm">
+        <p><strong>{{ attempt.decision }}</strong> / Final decision recorded</p>
+        <p *ngIf="attempt.decisionReason" class="question">{{ attempt.decisionReason }}</p>
+        <p class="muted">This attempt is read-only.</p>
+      </ng-container>
+      <ng-template #decisionForm>
+        <form *ngIf="attempt.status === 'GRADED'; else notReady" (ngSubmit)="submitDecision()">
+          <label for="decision">Final decision</label>
+          <select id="decision" name="decision" [(ngModel)]="decision" [disabled]="saving">
+            <option value="APPROVED">Approve skill verification</option>
+            <option value="REJECTED">Reject skill verification</option>
+          </select>
+          <ng-container *ngIf="decision === 'REJECTED'">
+            <label for="reason">Rejection reason (required)</label>
+            <textarea id="reason" name="reason" rows="4" [(ngModel)]="reason"
+              required [disabled]="saving"></textarea>
+          </ng-container>
+          <p *ngIf="decisionError" class="error" role="alert">{{ decisionError }}</p>
+          <button class="primary" type="submit" [disabled]="saving || (decision === 'REJECTED' && !reason.trim())">
+            {{ saving ? 'Saving decision...' : 'Save final decision' }}
+          </button>
+        </form>
+        <ng-template #notReady><p>A decision can be recorded only after the attempt reaches GRADED.</p></ng-template>
+      </ng-template>
+    </section>
+  </ng-container>
+</main>

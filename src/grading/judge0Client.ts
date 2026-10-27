@@ -30,6 +30,17 @@ function isLocalRunner(): boolean {
   return process.env.JUDGE0_BASE_URL?.trim().toLowerCase() === "local";
 }
 
+export function getConfiguredLanguageId(): number {
+  const configured = process.env.JUDGE0_LANGUAGE_ID?.trim();
+  const languageId = !configured && isLocalRunner() ? 63 : Number(configured);
+
+  if (!Number.isInteger(languageId) || languageId <= 0) {
+    throw new Error("JUDGE0_LANGUAGE_ID is not configured correctly");
+  }
+
+  return languageId;
+}
+
 function getBaseUrl(): string {
   const baseUrl = process.env.JUDGE0_BASE_URL;
 

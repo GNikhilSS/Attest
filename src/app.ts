@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cors from "cors";
 import { loginRouter } from "./auth/auth.routes.js";
 import { verify } from "./auth/auth.middleware.js";
 import type { AuthedRequest } from "./auth/auth.types.js";
@@ -7,8 +8,11 @@ import { attemptRouter } from "./attempts/attempts.routes.js";
 import { gradingRouter } from "./grading/grading.routes.js";
 import { decisionsRouter } from "./decisions/decisions.routes.js";
 import { errorHandler } from "./lib/errors.js";
+import { skillsRouter } from "./skills/skills.routes.js";
+import { expireOverdueAttempts } from "./attempts/attempts.controller.js";
 
 const app = express();
+app.use(cors())
 app.use(express.json());
 
 app.use((_req, res, next) => {
@@ -25,8 +29,13 @@ app.get("/health", (_req, res) => {
 
 app.use("/auth", loginRouter);
 app.use("/attempts", verify, attemptRouter);
+app.use("/skills", verify, skillsRouter);
 app.use("/grading", verify, gradingRouter);
 app.use("/decisions", verify, decisionsRouter);
+
+setInterval(() => {
+  expireOverdueAttempts().catch(console.error);
+}, 20_000);
 
 
 app.get('/protected', verify, (req, res) => {

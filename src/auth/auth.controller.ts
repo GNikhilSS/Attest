@@ -4,7 +4,6 @@ import { prisma } from "../lib/prisma.js";
 import { JWT_EXPIRY, JWT_SECRET } from '../lib/env.js';
 
 
-
 export const login = async (req: Request, res: Response) => {
     const employeeId = Number(req.body?.employeeId);
     if (!Number.isInteger(employeeId) || employeeId <= 0) {
@@ -22,7 +21,7 @@ export const login = async (req: Request, res: Response) => {
         { algorithm: "HS256", expiresIn: JWT_EXPIRY}
     )
 
-    res.json({ token });
+    res.json({ employee, token });
 }
 
 export const register = async (req: Request, res: Response) => {
@@ -39,5 +38,5 @@ export const register = async (req: Request, res: Response) => {
         { algorithm: "HS256", expiresIn: JWT_EXPIRY}
     )
 
-    res.json({ token });
+    res.json({ employee, token });
 }
