@@ -1,3 +1,24 @@
+//DONE
+// - Routes: run, saveDraft, submit, and report, each mapped to its handler.
+// - Shared getAttempt checks the id format, existence (404), ownership (403), and that the question belongs to the attempt.
+// - saveDraft updates the existing draft or creates one, and only while IN_PROGRESS.
+// - submitAttempt finalizes drafts and transitions to SUBMITTED in one transaction, then grades in the background.
+// - getGradingReport returns the report only to the owner.
+
+// NOT DONE
+// - getAttempt takes res and writes responses itself, mixing data loading with HTTP. Throw errors and let the global handler respond, as the rest of the code does.
+// - runCode and saveDraft wrap everything in try/catch, which conflicts with the global error handler you chose. Remove them.
+// - getAttempt on the report route loads every question’s submissions for no reason; load only the report.
+// - Submit returns 202 while grading runs; the response says gradingStatus PENDING but nothing tells the client how to check progress except the report route. Document that.
+// - Submit with no drafts still transitions; a candidate can submit with zero answers. Decide if that is allowed.
+// - Submit after deadline: the transition throws DEADLINE_PASSED, but the attempt stays IN_PROGRESS until the sweep. That’s correct, but the message should tell the candidate their answers were not saved.
+// - saveDraft and runCode check IN_PROGRESS but not the deadline, so drafts can still be saved after the deadline until the sweep runs. Add the deadline check, as for events.
+// - runCode uses getConfiguredLanguageId but accepts any sourceCode size and stdin size; add caps and rate limits.
+// - runCode returns Judge0 stderr and compile output to the candidate; acceptable for debugging, but confirm it does not leak hidden test data through error messages.
+// - submitAttempt’s catch maps DEADLINE_PASSED and INVALID_TRANSITION inline, duplicating the global error mapping; remove once the handler covers them.
+// - Routes file uses no validation library, while the attempts routes use Zod; make them consistent.
+// - The background grading call has no retry or visibility beyond the console.
+
 import type { Request, Response } from "express";
 import type { AuthedRequest } from "../auth/auth.types.js";
 import { AttemptStatus } from "../../generated/prisma/client.js";

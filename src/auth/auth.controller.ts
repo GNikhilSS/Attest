@@ -1,3 +1,18 @@
+//DONE
+// - login validates employeeId as a positive integer (400), checks the employee exists (401), and signs an HS256 token with the id.
+// - register creates an employee and returns a token.
+// - Token expiry and secret come from lib/env.ts.
+
+// NOT DONE
+// - login returns the full employee record, including managedById and name, which is more than the client needs. Return only what the client uses.
+// - Login messages differ: “Invalid EmpId (format)” and “Invalid EmpId” should be one generic message, per our rule.
+// - register returns 401 for a missing name; that should be 400, since it’s a malformed body.
+// - register has no input validation beyond presence: an empty or whitespace name passes.
+// - register is public and lets anyone create an employee with a token. It should be dev-only or removed before any shared use.
+// - register doesn’t check for duplicate names, so repeat calls create repeat employees.
+// - JWT is signed with no audience or issuer claims; fine for the POC, but note it for the OAuth change.
+// - Dev login still accepts any valid employee id with no credential check; mark it dev-only in code and docs.
+
 import type { Request, Response } from 'express';
 import jwt  from 'jsonwebtoken';
 import { prisma } from "../lib/prisma.js";

@@ -9,19 +9,11 @@ import { gradingRouter } from "./grading/grading.routes.js";
 import { decisionsRouter } from "./decisions/decisions.routes.js";
 import { errorHandler } from "./lib/errors.js";
 import { skillsRouter } from "./skills/skills.routes.js";
-import { expireOverdueAttempts } from "./attempts/attempts.controller.js";
+import './cron-jobs/expireAttempts.js';
 
 const app = express();
 app.use(cors())
 app.use(express.json());
-
-app.use((_req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
-    if (_req.method === "OPTIONS") return res.sendStatus(204);
-    next();
-});
 
 app.get("/health", (_req, res) => {
     return res.json({ status: "ok" });
@@ -32,17 +24,6 @@ app.use("/attempts", verify, attemptRouter);
 app.use("/skills", verify, skillsRouter);
 app.use("/grading", verify, gradingRouter);
 app.use("/decisions", verify, decisionsRouter);
-
-setInterval(() => {
-  expireOverdueAttempts().catch(console.error);
-}, 20_000);
-
-
-app.get('/protected', verify, (req, res) => {
-    const { employee } = req as AuthedRequest
-    return res.json({ message: employee });
-})
-
 
 app.use(errorHandler);
 

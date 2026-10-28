@@ -1,3 +1,23 @@
+// DONE
+// - judge0Client switches to the local runner when JUDGE0_BASE_URL is “local”, with a language default of 63 for JavaScript.
+// - Local results are stored by token, with a cap of 500 entries.
+// - Judge0 path: submit, poll, validate the response shape, with timeouts on each request.
+// - localRunner runs the candidate’s source in a node:vm context with a 2 second timeout.
+// - Timeouts map to status 5, runtime errors to status 11, successful runs to status 3.
+
+// NOT DONE
+// - node:vm is not a security boundary. A candidate can still escape the context, exhaust memory, or block the event loop with a synchronous loop that the timeout cannot preempt in all cases. Must not be used for real candidates; run it in a child process or switch to Judge0.
+// - The harness is not defined. The runner calls the last user-defined function with the parsed stdin, but the candidate’s function name is not fixed by the question, and a file with several helper functions picks the wrong one. Agree the wrapper format.
+// - Output is derived from console.log or from the function’s return value. A candidate who logs and also returns gets only the logged output, and a function that returns an object is printed with JSON.stringify, which may not match expectedOutput formatting.
+// - The stdout comparison uses trimmed text, so JSON spacing differences between expected and actual output will fail. Normalize JSON on both sides, or compare parsed values.
+// - console.error is captured into stderr, which is returned to the candidate by the run endpoint. Fine for debugging, but confirm it cannot reveal hidden test inputs.
+// - Local results are kept in process memory. Restarting the server loses them, so a grading job that runs after a restart fails with “Local submission not found”.
+// - The token check uses startsWith(“local_”) as a fallback, so a Judge0 token could be routed to the local map if it ever began with that prefix. Keep the routing on configuration only.
+// - Memory and time values are fixed placeholders (1024 and measured time), so they do not reflect real usage.
+// - The 500-entry cap evicts the oldest result. A slow grading run on many tests can lose results it still needs.
+// - getConfiguredLanguageId accepts “local” mode silently defaulting to 63, while remote mode requires an explicit id. Acceptable, but document it.
+// - No catch for errors thrown before the try in executeLocalCode, such as token generation; unlikely to fail, but the function is not fully guarded.
+
 import { executeLocalCode } from "./localRunner.js";
 
 export type Judge0SubmissionRequest = {

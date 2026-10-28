@@ -15,8 +15,6 @@ attemptRouter.get('/employee', getEmployeeAttemptRequests);
 
 attemptRouter.get('/manager', getManagerAttemptRequests);
 
-attemptRouter.post('/expire-overdue', expireOverdueAttempts);
-
 attemptRouter.post('/:attemptId/approve', approveAttemptRequest);
 
 attemptRouter.post('/:attemptId/start', startAttemptExam);

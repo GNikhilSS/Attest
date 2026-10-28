@@ -1,3 +1,25 @@
+// DONE
+// - createAttemptRequest: validates skill, creates REQUESTED attempt with token employee id.
+// - getAttemptRequest, getEmployeeAttemptRequests, getManagerAttemptRequests: filter by owner.
+// - removeAttemptRequest: conditional deleteMany (REQUESTED, manager's team only).
+// - recordAttemptEvent: owner check, IN_PROGRESS check, server sets serverTime.
+// - expireOverdueAttempts: draft promotion and SUBMITTED share one transaction.
+// - startAttemptExam twice: second call throws INVALID_TRANSITION, mapped to 409 by errorHandler.
+// - approveAttemptRequest with wrong manager: FORBIDDEN, mapped to 403 by errorHandler.
+//
+// NOT DONE
+// - startAttemptExam: no deadline check here; expired CREATED attempts surface as 500 until error mapping.
+// - approveAttemptRequest: failed exam build leaves attempt APPROVED with no retry route.
+// - buildExam not atomic yet; use the transaction-aware transition.
+// - recordAttemptEvent: type is free text; make it an enum with validation.
+// - recordAttemptEvent: no payload size cap or rate limit.
+// - recordAttemptEvent: no deadline check, so late events can be stored after expiry.
+// - expireOverdueAttempts: move out of the controller into its own module.
+// - expireOverdueAttempts: grading is fire-and-forget; failed grades need a way to be found and rerun.
+// - No submit route yet.
+// - Skill existence not checked before buildExam; missing questions fail at approve.
+
+
 import type { Request, Response } from "express"  
 
 import type { AuthedRequest } from "../auth/auth.types.js";

@@ -12,6 +12,25 @@ export const isEmployeeAttempt = async (attemptId: number, employeeId: number) =
     return attempt;
 }
 
+export const isManagerAttempt = async (attemptId: number, managerId: number) => {
+    const attempt = await prisma.attempt.findUnique({
+        where: {
+            id: attemptId,
+        },
+        include: {
+            approvedBy: {
+                select: {
+                    name: true
+                },
+                where: {
+                    id: managerId
+                }
+            }
+        }
+    })
+    return attempt;
+}
+
 export const buildExam = async (attemptId: number) => {
 
     const attempt = await prisma.attempt.findUnique({

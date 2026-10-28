@@ -1,3 +1,23 @@
+// DONE
+// - Transition table covers the full lifecycle, including the server expiry paths.
+// - Each transition checks the rule, the actor, and the deadline before writing.
+// - Writes are compare-and-set, so a stale or concurrent change fails instead of overwriting.
+// - Status change and event row commit in the same transaction.
+// - Decisions take explicit inputs and write decision and decisionReason columns.
+// - transitionAttemptInTransaction lets callers join their own transaction.
+// - CREATED sets the deadline from the shared exam window constant.
+
+// NOT DONE
+// - metadata is still a caller-supplied parameter; remove it or let the function build it.
+// - Manager-side checks run twice: in the controller and in validateActor. Keep it in one place.
+// - Error messages are plain strings; typed error classes would make mapping safer.
+// - Deadline is checked on the app clock in validateDeadline and on the database clock in the SQL path; the two can disagree slightly.
+// - Deadline is checked before the write and again on failure, so the message depends on which check fires first.
+// - DEADLINE_NOT_PASSED is an internal message; make sure it never reaches a candidate.
+// - No retry path for a transition that fails after its caller already did other writes outside the transaction.
+// - Event type for automatic submission is NOT_STARTED only when created to submitted; the expiry from in_progress records STATE_TRANSITION. Decide if that should differ.
+// - Decision on REJECTED stores a trimmed reason but the audit payload does not record the decision itself.
+
 import {
   AttemptStatus,
   Decision,
@@ -87,29 +107,24 @@ const transitionRules: TransitionRule[] = [
 ];
 
 // Transition validation
-export function canTransition(
-  from: AttemptStatus,
-  to: AttemptStatus,
-  actor: ActorType,
-): boolean {
-  return transitionRules.some(
-    (rule) =>
-      rule.from === from &&
-      rule.to === to &&
-      rule.actor === actor,
-  );
-}
-
 export function validateTransition(
   from: AttemptStatus,
   to: AttemptStatus,
   actor: ActorType,
 ): void {
-  if (!canTransition(from, to, actor)) {
+  const check = transitionRules.some(
+    (rule) =>
+      rule.from === from &&
+      rule.to === to &&
+      rule.actor === actor,
+  );
+
+  if (!check) {
     throw new Error(
       `INVALID_TRANSITION: ${from} -> ${to} by ${actor}`,
     );
   }
+  return;
 }
 
 function validateActor(
