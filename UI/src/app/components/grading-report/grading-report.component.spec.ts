@@ -2,8 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { HttpErrorResponse } from '@angular/common/http';
 import { of, Subject, throwError } from 'rxjs';
-import { AttemptService } from '../../../core/services/attempt.service';
-import { GradingReview } from '../../../shared/models/grading-review.model';
+import { AttemptService } from '../../core/services/attempt.service';
+import { GradingReview } from '../../models/grading-review.model';
 import { GradingReportComponent } from './grading-report.component';
 
 describe('GradingReportComponent', () => {

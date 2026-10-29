@@ -1,22 +1,100 @@
-@let output = this.codeRunOutput();
-@if (output) {
-  <div class="container bg-dark text-white p-4 rounded shadow-sm mt-4">
-    @if (hasErrorCompilation()) {
-      <div class="mb-3">
-        <h5 class="text-danger">Compile Errors</h5>
-        <pre class="bg-light text-dark p-3 rounded overflow-auto">{{
-          output.compileOutput
-        }}</pre>
-      </div>
-    } @else {
-      <div class="mb-3">
-        <h5 class="text-success">Stdout</h5>
-        <pre class="bg-light text-dark p-3 rounded">{{ output.stdout }}</pre>
-      </div>
-      <div class="mb-3">
-        <h5 class="text-warning">Stderr</h5>
-        <pre class="bg-light text-dark p-3 rounded">{{ output.stderr }}</pre>
+ @if (codeRunOutput()?.message && testCaseResults().length === 0) {
+  <section class="results-panel" aria-live="polite">
+    <p>{{ codeRunOutput()?.message }}</p>
+  </section>
+}
+
+@if (codeRunOutput() && testCaseResults().length === 0 && !codeRunOutput()?.message) {
+  <section class="results-panel" aria-live="polite">
+    <div class="results-header">
+      <h3>Custom input results</h3>
+      @if (codeRunOutput()?.status) {
+        <span class="case-status">
+          {{ codeRunOutput()?.status }}
+        </span>
+      }
+    </div>
+
+    <div class="output-section">
+      <h5>Output</h5>
+      <pre>{{ codeRunOutput()?.stdout ?? '(No output)' }}</pre>
+    </div>
+
+    @if (codeRunOutput()?.stderr) {
+      <div class="execution-error" role="alert">
+        <h5>Error</h5>
+        <pre>{{ codeRunOutput()?.stderr }}</pre>
       </div>
     }
-  </div>
+
+    @if (codeRunOutput()?.compileOutput) {
+      <div class="execution-error" role="alert">
+        <h5>Compilation output</h5>
+        <pre>{{ codeRunOutput()?.compileOutput }}</pre>
+      </div>
+    }
+  </section>
+}
+
+@if (testCaseResults().length > 0) {
+  <section class="results-panel" aria-label="Test case results">
+    <div class="results-header">
+      <div>
+        <h3>Run results</h3>
+        <p>
+          Visible tests: {{ visiblePassedCount() }} of
+          {{ visibleResults().length }} passed
+        </p>
+        <p>
+          Hidden tests: {{ hiddenPassedCount() }} of
+          {{ hiddenResults().length }} passed
+        </p>
+      </div>
+
+      <span
+        class="summary-badge"
+        [class.summary-failed]="passedCount() !== testCaseResults().length"
+      >
+        {{ passedCount() === testCaseResults().length ? 'Passed' : 'Failed' }}
+      </span>
+    </div>
+
+    @for (result of testCaseResults(); track result.testCaseNumber) {
+      <article class="test-case">
+        <div class="test-case-header">
+          <h4>Test case {{ result.testCaseNumber }}</h4>
+          <span
+            class="case-status"
+            [class.case-passed]="result.passed"
+            [class.case-failed]="!result.passed"
+          >
+            {{ result.passed ? 'Passed' : 'Failed' }}
+          </span>
+        </div>
+
+        <div class="output-grid">
+          <div class="output-section">
+            <h5>Input</h5>
+            <pre>{{ result.input || '(No input)' }}</pre>
+          </div>
+
+          <div class="output-section">
+            <h5>Expected output</h5>
+            <pre>{{ result.expectedOutput }}</pre>
+          </div>
+
+          <div class="output-section">
+            <h5>Actual output</h5>
+            <pre>{{ result.actualOutput || '(No output)' }}</pre>
+          </div>
+        </div>
+
+        @if (result.executionError) {
+          <div class="execution-error" role="alert">
+            {{ result.executionError }}
+          </div>
+        }
+      </article>
+    }
+  </section>
 }

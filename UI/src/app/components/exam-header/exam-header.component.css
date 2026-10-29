@@ -1,0 +1,79 @@
+:host {
+  display: block;
+}
+
+.exam-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px 24px;
+  background: #fff;
+  border: 1px solid #e2e6ec;
+  border-radius: 12px;
+}
+
+.exam-header h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 650;
+}
+
+.exam-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.exam-timer {
+  padding: 10px 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.exam-timer.timer-warning {
+  border-color: #fecdca;
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.btn-submit-exam {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #1d4ed8;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-submit-exam:hover {
+  background: #1e40af;
+}
+
+.btn-submit-exam:focus-visible {
+  outline: 2px solid #1d4ed8;
+  outline-offset: 3px;
+}
+
+@media (max-width: 560px) {
+  .exam-header {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 16px;
+  }
+
+  .exam-header-actions {
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+}

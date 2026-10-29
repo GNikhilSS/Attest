@@ -7,19 +7,19 @@ export const routes: Routes = [
     {
         path: 'login',
         canActivate: [guestGuard],
-        loadComponent: () => import('./features/auth/login/login.component')
+        loadComponent: () => import('./components/auth/login/login.component')
           .then(m => m.LoginComponent)
     },
     {
         path: 'register',
         canActivate: [guestGuard],
-        loadComponent: () => import('./features/auth/register/register.component')
+        loadComponent: () => import('./components/auth/register/register.component')
           .then(m => m.RegisterComponent)
     },
     {
         path: 'dashboard',
         canActivate: [authGuard],
-        loadComponent: () => import('./features/dashboard/employee-dashboard/employee-dashboard.component')
+        loadComponent: () => import('./components/dashboard/employee-dashboard/employee-dashboard.component')
           .then(m => m.EmployeeDashboardComponent)
     },
     {
@@ -32,7 +32,7 @@ export const routes: Routes = [
     {
         path: 'attempts/:attemptId/report',
         canActivate: [authGuard],
-        loadComponent: () => import('./features/exam/grading-report/grading-report.component')
+        loadComponent: () => import('./components/grading-report/grading-report.component')
           .then(m => m.GradingReportComponent)
     },
     {

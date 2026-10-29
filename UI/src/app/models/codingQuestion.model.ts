@@ -51,3 +51,33 @@ export interface CodeExecutionResult {
   memory?: number | null;
   message?: string;
 }
+
+export interface VisibleTestCase {
+  id?: number | string;
+  input: string;
+  expectedOutput: string;
+  visibility?: string;
+}
+
+export interface TestCaseRunResult {
+  testCaseNumber: number;
+  input: string;
+  expectedOutput: string;
+  actualOutput: string;
+  passed: boolean;
+  executionError?: string;
+}
+
+export interface SingleTestResult {
+  passed: boolean;
+  status: string;
+  actualOutput: string;
+}
+
+export interface RunAllTestsResult {
+  results: {
+    visibleinput: string;
+    expectedOutput?: string;
+    result: SingleTestResult;
+  }[];
+}

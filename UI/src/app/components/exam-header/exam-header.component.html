@@ -1,0 +1,17 @@
+<header class="exam-header">
+  <h2>{{ title() }}</h2>
+
+  <div class="exam-header-actions">
+    <span class="exam-timer" role="timer">
+      {{ formattedTime() }}
+    </span>
+
+    <button
+      type="button"
+      class="btn-submit-exam"
+      (click)="submitExam.emit()"
+    >
+      Submit Exam
+    </button>
+  </div>
+</header>

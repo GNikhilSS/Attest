@@ -4,6 +4,7 @@ import { Observable } from 'rxjs';
 import {
   CodeExecution,
   CodeExecutionResult,
+  RunAllTestsResult,
 } from '../../models/codingQuestion.model';
 
 @Injectable({
@@ -22,6 +23,17 @@ export class ExecutionService {
     return this.http.post<CodeExecutionResult>(
       `${this.url}/${attemptId}/questions/${questionId}/run`,
       { sourceCode, stdin }
+    );
+  }
+
+  runAllTests(
+    attemptId: number,
+    questionId: number,
+    sourceCode: string
+  ): Observable<RunAllTestsResult> {
+    return this.http.post<RunAllTestsResult>(
+      `${this.url}/${attemptId}/questions/${questionId}/runAllTests`,
+      { sourceCode }
     );
   }
 

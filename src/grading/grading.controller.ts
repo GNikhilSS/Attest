@@ -21,11 +21,12 @@
 
 import type { Request, Response } from "express";
 import type { AuthedRequest } from "../auth/auth.types.js";
-import { AttemptStatus } from "../../generated/prisma/client.js";
+import { AttemptStatus, Visibility } from "../../generated/prisma/client.js";
 import { prisma } from "../lib/prisma.js";
 import { transitionAttemptInTransaction } from "../attempts/attemptStateMachine.js";
 import { gradeAttempt } from "./gradingWorker.js";
 import { getConfiguredLanguageId, submitCode, waitForSubmissionResult } from "./judge0Client.js";
+import { evaluateResult } from "./evaluateResult.js";
 
 // Validates attempt ID and checks ownership by the authenticated employee
 async function getAttempt(req: Request, res: Response, questionId?: number) {
@@ -104,6 +105,78 @@ export const runCode = async (req: Request, res: Response) => {
     return res.status(500).json({ message: "Run code failed" });
   }
 };
+
+// POST /grading/:attemptId/questions/:questionId/runAllTests
+export const runAllTests = async (req: Request, res: Response) => {
+  const questionId = Number(req.params.questionId);
+  const { sourceCode } = req.body;
+
+  if (!Number.isInteger(questionId) || questionId <= 0) {
+    return res.status(400).json({ message: "Invalid question ID" });
+  }
+  
+  if (typeof sourceCode !== "string" || !sourceCode.trim()) {
+    return res.status(400).json({ message: "sourceCode required" });
+  }
+
+  const ctx = await getAttempt(req, res, questionId);
+  if (!ctx) return;
+
+  if (ctx.attempt.status !== AttemptStatus.IN_PROGRESS) {
+    return res.status(409).json({ message: "Attempt is not in progress" });
+  }
+
+  const testCases = await prisma.testCase.findMany({
+    where: {
+      questionId: questionId,
+      visibility: {
+        in: [Visibility.VISIBLE, Visibility.HIDDEN_A]
+      }
+    }
+  });
+
+  if (testCases.length <= 0) {
+    return res.status(404).json({ message: "Testcases not found" });
+  }
+
+  const languageId = getConfiguredLanguageId();
+
+  const results = [];
+  
+  for (let testCase of testCases) {
+    const { input, visibility } = testCase
+    const submission = await submitCode({
+      source_code: sourceCode,
+      language_id: languageId,
+      stdin: input,
+    });
+  
+    const output = await waitForSubmissionResult(submission.token);
+    let result = evaluateResult(output, testCase.expectedOutput);
+    const visibleinput = visibility === Visibility.VISIBLE ? input : 'HIDDEN'; 
+    result.actualOutput = visibility === Visibility.VISIBLE ? result.actualOutput: 'HIDDEN';
+
+    
+    if (visibility === Visibility.VISIBLE) {
+      results.push({
+        visibleinput,
+        expectedOutput: testCase.expectedOutput,
+        result
+      })
+    } else {
+      results.push({
+        visibleinput: 'HIDDEN',
+        result: {
+          passed: result.passed,
+          status: result.status,
+          actualOutput: null
+        }
+      })
+    }
+  }
+
+  return res.status(200).json({ results });
+}
 
 // PUT /grading/:attemptId/questions/:questionId/draft
 export const saveDraft = async (req: Request, res: Response) => {

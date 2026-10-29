@@ -4,14 +4,21 @@ import {
   saveDraft,
   submitAttempt,
   getGradingReport,
+  runAllTests,
 } from "./grading.controller.js";
 
 export const gradingRouter = Router();
 
 gradingRouter.post(
+  "/:attemptId/questions/:questionId/runAllTests",
+  runAllTests
+)
+
+gradingRouter.post(
   "/:attemptId/questions/:questionId/run",
   runCode,
 );
+
 
 gradingRouter.put(
   "/:attemptId/questions/:questionId/draft",

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { validateInputBody } from "../lib/middleware.js";
+import { validateInputBody } from "../lib/middleware/validations.js";
 import { AttemptCreationSchema } from "./attempts.schema.js";
 import { approveAttemptRequest, createAttemptRequest, getAttemptRequest, getEmployeeAttemptRequests, getManagerAttemptRequests, removeAttemptRequest, startAttemptExam, viewAttemptExam, expireOverdueAttempts, recordAttemptEvent } from "./attempts.controller.js";
 

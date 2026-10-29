@@ -1,10 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnInit } from '@angular/core';
-import { Attempt } from '../../../shared/models/attempt.model';
+import { Attempt } from '../../../models/attempt.model';
 import { AttemptService } from '../../../core/services/attempt.service';
 import { CreateRequestComponent } from '../create-request/create-request.component';
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
+import { Employee } from '../../../models/employee.model';
 
 @Component({
   selector: 'app-employee-dashboard',
@@ -15,6 +16,8 @@ import { AuthService } from '../../../core/services/auth.service';
 })
 export class EmployeeDashboardComponent implements OnInit {
   activeTab: 'employee' | 'manager' = 'employee';
+
+  employee: Employee | null = null;
 
   employeeAttempts: Attempt[] = [];
   managerAttempts: Attempt[] = [];
@@ -42,6 +45,8 @@ export class EmployeeDashboardComponent implements OnInit {
   ngOnInit(): void {
     this.loadEmployeeAttempts();
     this.loadManagerAttempts();
+    
+    this.employee = this.authService.getEmployee();
   }
 
   loadEmployeeAttempts(): void {

@@ -1,4 +1,3 @@
-import { NgClass } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -9,15 +8,23 @@ import {
 import { FormsModule } from '@angular/forms';
 import { NgbNavModule } from '@ng-bootstrap/ng-bootstrap';
 import { EditorComponent } from 'ngx-monaco-editor-v2';
-import { concatMap, finalize, from, toArray } from 'rxjs';
-import { CodeExecutionResult } from '../../models/codingQuestion.model';
+import { concatMap, finalize, from, fromEvent, map, of, tap, toArray } from 'rxjs';
+import { CodeExecutionResult, TestCaseRunResult, VisibleTestCase } from '../../models/codingQuestion.model';
 import { CodeRunComponent } from '../code-run/code-run.component';
 import { CodeGeneratorService } from '../../core/services/code-generator.service';
 import { ExecutionService } from '../../core/services/execution.service';
 import { SpinnerService } from '../../core/services/spinner.service';
 import { AttemptService } from '../../core/services/attempt.service';
 import { ActivatedRoute } from '@angular/router';
-import { AttemptQuestion } from '../../core/models/attempt-question.model';
+import { AttemptQuestion } from '../../models/attempt-question.model';
+
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { timer } from 'rxjs';
+
+import { ExamHeaderComponent } from '../exam-header/exam-header.component';
+import { QuestionNavigationComponent } from '../question-navigation/question-navigation.component';
+import { ExamEventService } from '../../core/services/exam-event.service';
 @Component({
   selector: 'app-coding-view',
   imports: [
@@ -25,6 +32,8 @@ import { AttemptQuestion } from '../../core/models/attempt-question.model';
     FormsModule,
     NgbNavModule,
     CodeRunComponent,
+    ExamHeaderComponent,
+    QuestionNavigationComponent
   ],
   templateUrl: './coding-view.component.html',
   styleUrl: './coding-view.component.scss',
@@ -36,6 +45,7 @@ export class CodingViewComponent {
   private spinner = inject(SpinnerService);
   private readonly route = inject(ActivatedRoute);
   private readonly attemptService = inject(AttemptService);
+  private readonly examEventService = inject(ExamEventService);
   private readonly attemptId = Number(
     this.route.snapshot.paramMap.get('attemptId')
   );
@@ -53,6 +63,7 @@ export class CodingViewComponent {
   codeRunOutput = signal<CodeExecutionResult | null>(null);
   active = 'description';
   submissionResult = signal<any>(null);
+  testCaseResults = signal<TestCaseRunResult[]>([]);
 
   editorOptions = computed(() => ({
     language: this.language(),
@@ -99,6 +110,15 @@ export class CodingViewComponent {
             item.questionId,
             this.drafts()[item.questionId] ?? '',
           )
+          .pipe(
+            tap(() => {
+              this.examEventService.track(
+                this.attemptId,
+                'DRAFT_SAVED',
+                item.questionId,
+              );
+            }),
+          ),
         ),
         toArray(),
         concatMap(() =>
@@ -108,6 +128,7 @@ export class CodingViewComponent {
       )
       .subscribe({
         next: result => {
+          this.examEventService.track(this.attemptId, 'EXAM_SUBMITTED');
           this.submissionResult.set(result);
           this.active = 'submission-detail';
         },
@@ -132,6 +153,75 @@ export class CodingViewComponent {
       return;
     }
 
+    this.examEventService.track(
+      this.attemptId,
+      'CODE_RUN',
+      item.questionId,
+      { language: this.language() },
+    );
+
+    const sourceCode = this.code();
+
+    this.testCaseResults.set([]);
+    this.codeRunOutput.set(null);
+    this.spinner.openGlobalSpinner();
+
+    this.executionService
+      .runAllTests(this.attemptId, item.questionId, sourceCode)
+      .pipe(
+        finalize(() => this.spinner.closeGlobalSpinner())
+      )
+      .subscribe({
+        next: response => {
+          const results: TestCaseRunResult[] = response.results.map(
+            (entry, index) => {
+              const isHidden = entry.visibleinput === 'HIDDEN';
+              const result = entry.result;
+
+              return {
+                testCaseNumber: index + 1,
+                input: isHidden ? 'HIDDEN' : entry.visibleinput,
+                expectedOutput: isHidden ? 'HIDDEN' : entry.expectedOutput ?? '',
+                actualOutput: result.actualOutput ?? '',
+                passed: result.passed,
+                executionError:
+                  result.passed || result.status === 'Accepted'
+                    ? undefined
+                    : result.status,
+              };
+            }
+          );
+
+          this.testCaseResults.set(results);
+        },
+        error: error => {
+          console.error('Failed to run test cases:', error);
+
+          this.codeRunOutput.set({
+            message:
+              error.error?.message ?? 'Failed to execute test cases.',
+          });
+        },
+      });
+  }
+
+  runCustomInput(): void {
+    const item = this.selectedAttemptQuestion();
+
+    if (!item || !this.attemptId) {
+      console.error('Missing attempt or question');
+      return;
+    }
+
+    this.examEventService.track(
+      this.attemptId,
+      'CUSTOM_INPUT_RUN',
+      item.questionId,
+      { language: this.language() },
+    );
+
+    this.testCaseResults.set([]);
+    this.codeRunOutput.set(null);
     this.spinner.openGlobalSpinner();
 
     this.executionService
@@ -139,29 +229,24 @@ export class CodingViewComponent {
         this.attemptId,
         item.questionId,
         this.code(),
-        this.codeRunInput(),
+        this.codeRunInput()
       )
       .pipe(
-        finalize(() => this.spinner.closeGlobalSpinner()),
+        finalize(() => this.spinner.closeGlobalSpinner())
       )
       .subscribe({
-        next: (result) => {
-          console.log('Code execution:', result);
-          this.codeRunOutput.set(result);
+        next: result => {
+          console.log('Custom execution result:', result);
+        this.codeRunOutput.set(result);
         },
-        error: (error) => {
-          console.error('Code execution failed:', error);
-
+        error: error => {
+          console.error('Custom execution failed:', error);
           this.codeRunOutput.set({
-            message:
-              error.error?.message ?? 'Failed to execute code.',
-            stderr:
-              error.error?.message ?? 'Failed to execute code.',
+            message: error.error?.message ?? 'Execution failed.',
           });
         },
       });
   }
-
 
   loadExam(): void {
     const attemptId = Number(
@@ -202,14 +287,22 @@ export class CodingViewComponent {
 
   private startExam(attemptId: number): void {
     this.attemptService.startAttemptExam(attemptId).subscribe({
-      next: response => this.setExamQuestions(response.attemptQuestions),
+      next: response => {
+        this.examEventService.track(attemptId, 'EXAM_STARTED');
+        this.setExamQuestions(response.attemptQuestions)
+        this.enterFullscreen();
+      },
       error: error => console.error('Failed to start exam:', error)
     });
   }
 
   private viewExam(attemptId: number): void {
     this.attemptService.viewAttemptExam(attemptId).subscribe({
-      next: response => this.setExamQuestions(response.attemptQuestions),
+      next: response => {
+        this.examEventService.track(attemptId, 'EXAM_STARTED');
+        this.setExamQuestions(response.attemptQuestions)
+        this.enterFullscreen();
+      },
       error: error => console.error('Failed to view exam:', error)
     });
   }
@@ -233,6 +326,28 @@ export class CodingViewComponent {
     const item = this.attemptQuestions()[index];
     if (!item) return;
 
+    const previousIndex = this.selectedQuestionIndex();
+
+    if (previousIndex !== index) {
+      const previousQuestion = this.attemptQuestions()[previousIndex];
+
+      this.examEventService.track(
+        this.attemptId,
+        'QUESTION_CHANGED',
+        item.questionId,
+        {
+          fromQuestionId: previousQuestion?.questionId,
+          toQuestionId: item.questionId,
+        },
+      );
+    } else {
+      this.examEventService.track(
+        this.attemptId,
+        'QUESTION_VIEWED',
+        item.questionId,
+      );
+    }
+
     this.selectedQuestionIndex.set(index);
 
     this.code.set(
@@ -248,10 +363,6 @@ export class CodingViewComponent {
     this.codeRunOutput.set(null);
   }
 
-  constructor() {
-    this.loadExam();
-  }
-
   // Drafts
   drafts = signal<Record<number, string>>({});
 
@@ -261,10 +372,83 @@ export class CodingViewComponent {
     const item = this.selectedAttemptQuestion();
     if (!item) return;
 
+    this.examEventService.trackCodeEdited(
+      this.attemptId,
+      item.questionId,
+      value.length,
+    );
+
     this.drafts.update(current => ({
       ...current,
       [item.questionId]: value,
     }));
+  }
+
+  // Timer
+  private readonly destroyRef = inject(DestroyRef);
+
+  readonly remainingSeconds = signal(90 * 60);
+
+  readonly formattedTime = computed(() => {
+    const total = this.remainingSeconds();
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor((total % 3600) / 60);
+    const seconds = total % 60;
+
+    return [hours, minutes, seconds]
+      .map(value => String(value).padStart(2, '0'))
+      .join(':');
+  });
+
+  constructor() {
+    timer(1000, 1000)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.remainingSeconds.update(value => {
+          const nextValue = Math.max(0, value - 1);
+
+          if (value > 0 && nextValue === 0) {
+            this.examEventService.track(
+              this.attemptId,
+              'EXAM_TIME_EXPIRED',
+            );
+          }
+
+          return nextValue;
+        });;
+      });
+    
+    fromEvent(document, 'visibilitychange')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.examEventService.track(
+          this.attemptId,
+          document.hidden ? 'TAB_HIDDEN' : 'TAB_VISIBLE',
+        );
+      });
+
+    fromEvent(document, 'fullscreenchange')
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(() => {
+        this.examEventService.track(
+          this.attemptId,
+          document.fullscreenElement
+            ? 'FULLSCREEN_ENTERED'
+            : 'FULLSCREEN_EXITED',
+        );
+      });
+
+    this.loadExam();
+  }
+
+  enterFullscreen(): void {
+    const element = document.documentElement;
+
+    if (!document.fullscreenElement) {
+      element.requestFullscreen().catch(error => {
+        console.error('Failed to enter fullscreen:', error);
+      });
+    }
   }
 
 }

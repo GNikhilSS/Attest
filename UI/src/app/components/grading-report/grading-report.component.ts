@@ -4,9 +4,9 @@ import { Component, DestroyRef, OnInit, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { AttemptService } from '../../../core/services/attempt.service';
-import { AttemptDecision } from '../../../shared/models/attempt.model';
-import { GradingReview, ReviewTestResult } from '../../../shared/models/grading-review.model';
+import { AttemptService } from '../../core/services/attempt.service';
+import { AttemptDecision } from '../../models/attempt.model';
+import { GradingReview, ReviewTestResult } from '../../models/grading-review.model';
 
 @Component({
   selector: 'app-grading-report',

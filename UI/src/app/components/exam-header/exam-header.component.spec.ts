@@ -1,18 +1,18 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
-import { CodeEditorComponent } from './code-editor.component';
+import { ExamHeaderComponent } from './exam-header.component';
 
-describe('CodeEditorComponent', () => {
-  let component: CodeEditorComponent;
-  let fixture: ComponentFixture<CodeEditorComponent>;
+describe('ExamHeaderComponent', () => {
+  let component: ExamHeaderComponent;
+  let fixture: ComponentFixture<ExamHeaderComponent>;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [CodeEditorComponent]
+      imports: [ExamHeaderComponent]
     })
     .compileComponents();
 
-    fixture = TestBed.createComponent(CodeEditorComponent);
+    fixture = TestBed.createComponent(ExamHeaderComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
   });

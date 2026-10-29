@@ -1,0 +1,17 @@
+
+<nav class="question-navigation" aria-label="Exam questions">
+  <span class="navigation-label">Questions</span>
+
+  @for (question of questions(); track question.questionId; let i = $index) {
+    <button
+      type="button"
+      class="question-button"
+      [class.active]="selectedIndex() === i"
+      [attr.aria-current]="selectedIndex() === i ? 'step' : null"
+      [attr.aria-label]="'Question ' + question.position"
+      (click)="questionSelected.emit(i)"
+    >
+      {{ question.position }}
+    </button>
+  }
+</nav>

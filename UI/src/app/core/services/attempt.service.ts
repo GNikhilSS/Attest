@@ -1,9 +1,9 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Attempt, AttemptDecision } from '../../shared/models/attempt.model';
-import { GradingReview } from '../../shared/models/grading-review.model';
-import { AttemptQuestion } from '../models/attempt-question.model';
+import { Attempt, AttemptDecision } from '../../models/attempt.model';
+import { GradingReview } from '../../models/grading-review.model';
+import { AttemptQuestion } from '../../models/attempt-question.model';
 
 @Injectable({
   providedIn: 'root'

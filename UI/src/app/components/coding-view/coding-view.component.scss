@@ -1,32 +1,262 @@
 
-:host { display: block; padding: 20px; }
-.container-fluid { max-width: 1600px; margin: 0 auto; }
-.row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 20px; }
-.col-6 { min-width: 0; background: white; border: 1px solid #e2e6ec; border-radius: 10px; overflow: hidden; }
-.col-6:first-child { padding: 24px; }
-.col-6:last-child { display: flex; flex-direction: column; }
-h3 { margin: 0 0 16px; font-size: 22px; }
-p { color: #475467; white-space: pre-wrap; }
-nav { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 0; border-top: 1px solid #e2e6ec; }
-button { padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 6px; background: white; color: #344054; cursor: pointer; }
-nav button[aria-current="step"] { color: #1d4ed8; background: #eff6ff; border-color: #93b4fa; }
-button:hover:not(:disabled) { background: #f3f4f6; }
-.bg-dark { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 16px; background: #f8fafc; border-bottom: 1px solid #e2e6ec; }
-.bg-dark > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-h5 { margin: 0; font-size: 15px; }
-select, textarea { padding: 10px; background: white; border: 1px solid #d1d5db; border-radius: 6px; color: #172033; }
-.btn-primary { background: #2563eb; border-color: #2563eb; color: white; }
-.btn-primary:hover:not(:disabled) { background: #1d4ed8; }
-.btn-success { color: #067647; background: #ecfdf3; border-color: #abefc6; }
-.btn-success:hover:not(:disabled) { background: #dcfae6; }
-.flex-grow-1.overflow-auto { flex: 1; min-height: 420px; }
-ngx-monaco-editor { display: block; height: 100%; min-height: 420px; }
-.container.bg-light { padding: 20px; border-top: 1px solid #e2e6ec; }
-.container.bg-light h5 { margin-bottom: 12px; }
-label { display: block; font-size: 14px; color: #667085; margin-bottom: 8px; }
-textarea { width: 100%; font-family: Consolas, monospace; min-height: 100px; }
-@media (max-width: 850px) {
-  :host { padding: 12px; }
-  .row { grid-template-columns: minmax(0, 1fr); }
-  .col-6:first-child { padding: 20px; }
+:host {
+  display: block;
+  min-height: 100%;
+  padding: 20px;
+  background: #f5f7fb;
+  color: #172033;
+}
+
+.exam-page {
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+/* Main exam layout */
+.exam-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.3fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.question-panel,
+.editor-panel {
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e2e6ec;
+  border-radius: 10px;
+}
+
+/* Question details */
+.question-panel {
+  padding: 24px;
+}
+
+.question-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.eyebrow {
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.question-type {
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: #f2f4f7;
+  color: #475467;
+  font-size: 12px;
+}
+
+.question-panel h3,
+.editor-heading h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.question-content {
+  margin-top: 14px;
+  color: #475467;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Code editor panel */
+.editor-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 16px;
+  border-bottom: 1px solid #e2e6ec;
+}
+
+.editor-heading,
+.editor-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.language-select,
+.custom-input {
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  color: #172033;
+}
+
+.language-select {
+  width: auto;
+  max-width: 190px;
+  padding: 8px 10px;
+}
+
+.btn-run,
+.btn-submit-problem {
+  padding: 9px 13px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-run {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.btn-run:hover {
+  background: #1d4ed8;
+}
+
+.btn-submit-problem {
+  border-color: #abefc6;
+  background: #ecfdf3;
+  color: #067647;
+}
+
+.btn-submit-problem:hover {
+  background: #dcfae6;
+}
+
+.btn-run:focus-visible,
+.btn-submit-problem:focus-visible,
+.language-select:focus-visible,
+.custom-input:focus-visible {
+  outline: 3px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+/* Monaco editor */
+.editor-container {
+  flex: 1;
+  min-height: 420px;
+  overflow: hidden;
+}
+
+ngx-monaco-editor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+}
+
+/* Custom input */
+.custom-input-panel {
+  padding: 18px;
+  border-top: 1px solid #e2e6ec;
+  background: #fafbfc;
+}
+
+.custom-input-panel h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.custom-input-panel p {
+  margin: 0 0 14px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.custom-input-panel label {
+  display: block;
+  margin-bottom: 8px;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.custom-input {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  font-family: Consolas, monospace;
+  resize: vertical;
+}
+
+.btn-run-custom {
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: #ffffff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-run-custom:hover {
+  background-color: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.btn-run-custom:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.btn-run-custom:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Responsive layout */
+@media (max-width: 900px) {
+  :host {
+    padding: 12px;
+  }
+
+  .exam-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .question-panel {
+    padding: 18px;
+  }
+
+  .editor-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .editor-actions {
+    width: 100%;
+  }
+
+  .editor-actions button {
+    flex: 1;
+  }
+
+  .editor-container,
+  ngx-monaco-editor {
+    min-height: 350px;
+  }
 }
