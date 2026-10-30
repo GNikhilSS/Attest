@@ -10,6 +10,8 @@ export type ExamEventType =
   | 'TAB_HIDDEN'
   | 'TAB_VISIBLE'
   | 'CODE_EDITED'
+  | 'COPY'
+  | 'PASTE'
   | 'FULLSCREEN_ENTERED'
   | 'FULLSCREEN_EXITED';
 

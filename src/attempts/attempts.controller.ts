@@ -161,7 +161,9 @@ export const startAttemptExam    = async (req: Request, res: Response) => {
     
     const attemptQuestions = await getAttemptQuestions(attemptId);
 
-    return res.status(200).json({ attemptQuestions });
+    const { startTime } = attempt;
+
+    return res.status(200).json({ startTime, attemptQuestions });
 }
 
 export const viewAttemptExam = async (req: Request, res: Response) => {
@@ -183,7 +185,9 @@ export const viewAttemptExam = async (req: Request, res: Response) => {
 
     const attemptQuestions = await getAttemptQuestions(attemptId);
 
-    return res.status(200).json({ attemptQuestions });
+    const { startTime } = attempt;
+
+    return res.status(200).json({ startTime, attemptQuestions });
 }
 
 export const recordAttemptEvent = async (req: Request, res: Response) => {

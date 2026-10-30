@@ -1,11 +1,16 @@
-import { Injectable } from '@angular/core';
-import { ExamEvent, ExamEventType } from '../../models/exam-event.model';
+import { inject, Injectable } from '@angular/core';
+import { ExamEventType } from '../../models/exam-event.model';
 import { debounceTime, Subject } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
 
 @Injectable({
-  providedIn: 'root',
+    providedIn: 'root',
 })
 export class ExamEventService {
+    private readonly http = inject(HttpClient);
+
+    private readonly apiUrl = 'http://localhost:3000/attempts';
+
     private readonly codeEdits = new Subject<{
         attemptId: number;
         questionId: number;
@@ -29,17 +34,20 @@ export class ExamEventService {
         questionId?: number,
         metadata?: Record<string, unknown>,
     ): void {
-        const event: ExamEvent = {
-        attemptId,
-        eventType,
-        timestamp: new Date().toISOString(),
-        ...(questionId !== undefined ? { questionId } : {}),
-        ...(metadata ? { metadata } : {}),
+        const payload = {
+            ...(questionId !== undefined ? { questionId } : {}),
+            ...metadata,
         };
 
-        // Temporary: verify event tracking in the browser console.
-        // Later, replace this with a POST to the backend.
-        console.log('[Exam Event]', event);
+        this.http
+            .post(`${this.apiUrl}/${attemptId}/events`, {
+                type: eventType,
+                payload,
+            })
+            .subscribe({
+                next: response => console.log('[Exam Event Saved]', response),
+                error: error => console.error('Failed to save exam event:', error),
+            });
     }
 
     trackCodeEdited(

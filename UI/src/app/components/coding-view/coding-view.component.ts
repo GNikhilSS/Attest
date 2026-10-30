@@ -2,21 +2,25 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  HostListener,
   inject,
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { NgbNavModule } from '@ng-bootstrap/ng-bootstrap';
 import { EditorComponent } from 'ngx-monaco-editor-v2';
-import { concatMap, finalize, from, fromEvent, map, of, tap, toArray } from 'rxjs';
-import { CodeExecutionResult, TestCaseRunResult, VisibleTestCase } from '../../models/codingQuestion.model';
+import { concatMap, finalize, from, fromEvent, tap, toArray } from 'rxjs';
+import { CodeExecutionResult, TestCaseRunResult } from '../../models/codingQuestion.model';
 import { CodeRunComponent } from '../code-run/code-run.component';
 import { CodeGeneratorService } from '../../core/services/code-generator.service';
 import { ExecutionService } from '../../core/services/execution.service';
 import { SpinnerService } from '../../core/services/spinner.service';
 import { AttemptService } from '../../core/services/attempt.service';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { AttemptQuestion } from '../../models/attempt-question.model';
+
+import type * as monaco from 'monaco-editor';
+import { KeyCode } from 'monaco-editor';
 
 import { DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -75,8 +79,10 @@ export class CodingViewComponent {
     automaticLayout: true,
   }));
 
-  
-  
+
+
+  private isSubmitting = false;
+
   submitSolution(): void {
     if (!this.attemptId) {
       console.error('Invalid attempt ID');
@@ -89,6 +95,9 @@ export class CodingViewComponent {
       console.error('No exam questions loaded');
       return;
     }
+
+    if (this.isSubmitting) return;
+    this.isSubmitting = true;
 
     // Capture the latest editor value for the selected question.
     const currentQuestion = this.selectedAttemptQuestion();
@@ -110,27 +119,36 @@ export class CodingViewComponent {
             item.questionId,
             this.drafts()[item.questionId] ?? '',
           )
-          .pipe(
-            tap(() => {
-              this.examEventService.track(
-                this.attemptId,
-                'DRAFT_SAVED',
-                item.questionId,
-              );
-            }),
-          ),
+            .pipe(
+              tap(() => {
+                this.examEventService.track(
+                  this.attemptId,
+                  'DRAFT_SAVED',
+                  item.questionId,
+                );
+              }),
+            ),
         ),
         toArray(),
         concatMap(() =>
           this.executionService.submitAttempt(this.attemptId)
         ),
-        finalize(() => this.spinner.closeGlobalSpinner()),
+        finalize(() => {
+          this.spinner.closeGlobalSpinner()
+          this.isSubmitting = false;
+        }),
       )
       .subscribe({
         next: result => {
-          this.examEventService.track(this.attemptId, 'EXAM_SUBMITTED');
           this.submissionResult.set(result);
           this.active = 'submission-detail';
+
+          this.examEventService.track(
+            this.attemptId,
+            'EXAM_SUBMITTED'
+          );
+
+          this.router.navigate(['/dashboard']);
         },
         error: error => {
           console.error('Failed to save drafts or submit attempt:', error);
@@ -138,13 +156,25 @@ export class CodingViewComponent {
       });
   }
 
+  private autoSubmitExam(): void {
+    if (this.isSubmitting) return;
+
+    console.log('Exam time expired. Submitting automatically.');
+
+    this.examEventService.track(
+      this.attemptId,
+      'EXAM_TIME_EXPIRED'
+    );
+
+    this.submitSolution();
+  }
 
 
   hasErrorCompilation(): boolean {
     return this.codeRunOutput()?.status === 'Compilation Error';
   }
 
-  
+
   runCode(): void {
     const item = this.selectedAttemptQuestion();
 
@@ -237,7 +267,7 @@ export class CodingViewComponent {
       .subscribe({
         next: result => {
           console.log('Custom execution result:', result);
-        this.codeRunOutput.set(result);
+          this.codeRunOutput.set(result);
         },
         error: error => {
           console.error('Custom execution failed:', error);
@@ -272,11 +302,14 @@ export class CodingViewComponent {
         if (attempt.status === 'CREATED') {
           this.startExam(attemptId);
         } else if (attempt.status === 'IN_PROGRESS') {
+          if (!attempt.startTime) {
+            console.error('In-progress attempt has no start time');
+            return;
+          }
+
           this.viewExam(attemptId);
         } else {
-          console.error(
-            `Cannot open exam in status: ${attempt.status}`
-          );
+          console.error(`Cannot open exam in status: ${attempt.status}`);
         }
       },
       error: error => {
@@ -289,7 +322,8 @@ export class CodingViewComponent {
     this.attemptService.startAttemptExam(attemptId).subscribe({
       next: response => {
         this.examEventService.track(attemptId, 'EXAM_STARTED');
-        this.setExamQuestions(response.attemptQuestions)
+        this.setExamQuestions(response.attemptQuestions);
+        this.initializeTimer(response.startTime);
         this.enterFullscreen();
       },
       error: error => console.error('Failed to start exam:', error)
@@ -300,7 +334,8 @@ export class CodingViewComponent {
     this.attemptService.viewAttemptExam(attemptId).subscribe({
       next: response => {
         this.examEventService.track(attemptId, 'EXAM_STARTED');
-        this.setExamQuestions(response.attemptQuestions)
+        this.setExamQuestions(response.attemptQuestions);
+        this.initializeTimer(response.startTime);
         this.enterFullscreen();
       },
       error: error => console.error('Failed to view exam:', error)
@@ -327,16 +362,42 @@ export class CodingViewComponent {
     if (!item) return;
 
     const previousIndex = this.selectedQuestionIndex();
+    const previousQuestion = this.attemptQuestions()[previousIndex];
 
-    if (previousIndex !== index) {
-      const previousQuestion = this.attemptQuestions()[previousIndex];
+    // Save the previous question before switching.
+    if (previousQuestion && previousIndex !== index) {
+      const sourceCode = this.code();
+
+      this.drafts.update(current => ({
+        ...current,
+        [previousQuestion.questionId]: sourceCode,
+      }));
+
+      this.executionService
+        .saveDraft(
+          this.attemptId,
+          previousQuestion.questionId,
+          sourceCode,
+        )
+        .subscribe({
+          next: () => {
+            this.examEventService.track(
+              this.attemptId,
+              'DRAFT_SAVED',
+              previousQuestion.questionId,
+            );
+          },
+          error: error => {
+            console.error('Failed to save draft:', error);
+          },
+        });
 
       this.examEventService.track(
         this.attemptId,
         'QUESTION_CHANGED',
         item.questionId,
         {
-          fromQuestionId: previousQuestion?.questionId,
+          fromQuestionId: previousQuestion.questionId,
           toQuestionId: item.questionId,
         },
       );
@@ -353,11 +414,11 @@ export class CodingViewComponent {
     this.code.set(
       this.drafts()[item.questionId] ??
       item.question.starterCode ??
-      ''
+      '',
     );
 
     this.codeRunInput.set(
-      item.question.testCases[0]?.input ?? ''
+      item.question.testCases[0]?.input ?? '',
     );
 
     this.codeRunOutput.set(null);
@@ -389,35 +450,43 @@ export class CodingViewComponent {
 
   readonly remainingSeconds = signal(90 * 60);
 
-  readonly formattedTime = computed(() => {
-    const total = this.remainingSeconds();
-    const hours = Math.floor(total / 3600);
-    const minutes = Math.floor((total % 3600) / 60);
-    const seconds = total % 60;
+  private initializeTimer(startTime: string | null): void {
+    if (!startTime) {
+      console.error('Cannot initialize timer: start time is missing');
+      return;
+    }
 
-    return [hours, minutes, seconds]
-      .map(value => String(value).padStart(2, '0'))
-      .join(':');
-  });
+    const durationMs = 90 * 60 * 1000;
+    const deadline = new Date(startTime).getTime() + durationMs;
 
-  constructor() {
+    const updateTimer = () => {
+      const remaining = Math.max(
+        0,
+        Math.ceil((deadline - Date.now()) / 1000)
+      );
+
+      this.remainingSeconds.set(remaining);
+    };
+
+    updateTimer();
+
     timer(1000, 1000)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
-        this.remainingSeconds.update(value => {
-          const nextValue = Math.max(0, value - 1);
+        const previous = this.remainingSeconds();
+        updateTimer();
 
-          if (value > 0 && nextValue === 0) {
-            this.examEventService.track(
-              this.attemptId,
-              'EXAM_TIME_EXPIRED',
-            );
-          }
-
-          return nextValue;
-        });;
+        if (previous > 0 && this.remainingSeconds() === 0) {
+          this.autoSubmitExam();
+          this.examEventService.track(
+            this.attemptId,
+            'EXAM_TIME_EXPIRED'
+          );
+        }
       });
-    
+  }
+
+  constructor() {
     fromEvent(document, 'visibilitychange')
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => {
@@ -441,6 +510,48 @@ export class CodingViewComponent {
     this.loadExam();
   }
 
+  @HostListener('document:copy')
+  onDocumentCopy(): void {
+    console.log('COPY EVENT DETECTED');
+
+    this.examEventService.track(
+      this.attemptId,
+      'COPY',
+      this.selectedAttemptQuestion()?.questionId,
+    );
+  }
+
+  @HostListener('document:paste')
+  onDocumentPaste(): void {
+    console.log('PASTE EVENT DETECTED');
+
+    this.examEventService.track(
+      this.attemptId,
+      'PASTE',
+      this.selectedAttemptQuestion()?.questionId,
+    );
+  }
+
+  onEditorInit(editorInstance: monaco.editor.IStandaloneCodeEditor): void {
+
+    editorInstance.onKeyDown(event => {
+      if (
+        event.keyCode === KeyCode.KeyV &&
+        (event.ctrlKey || event.metaKey)
+      ) {
+        this.onEditorPaste();
+      }
+    });
+  }
+
+  onEditorPaste(): void {
+    this.examEventService.track(
+      this.attemptId,
+      'PASTE',
+      this.selectedAttemptQuestion()?.questionId,
+    );
+  }
+
   enterFullscreen(): void {
     const element = document.documentElement;
 
@@ -449,6 +560,24 @@ export class CodingViewComponent {
         console.error('Failed to enter fullscreen:', error);
       });
     }
+  }
+
+  // Submit route
+  private readonly router = inject(Router);
+
+  showSubmitConfirmation = signal(false);
+
+  requestSubmit(): void {
+    this.showSubmitConfirmation.set(true);
+  }
+
+  cancelSubmit(): void {
+    this.showSubmitConfirmation.set(false);
+  }
+
+  confirmSubmit(): void {
+    this.showSubmitConfirmation.set(false);
+    this.submitSolution();
   }
 
 }

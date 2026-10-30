@@ -27,6 +27,7 @@ import { transitionAttemptInTransaction } from "../attempts/attemptStateMachine.
 import { gradeAttempt } from "./gradingWorker.js";
 import { getConfiguredLanguageId, submitCode, waitForSubmissionResult } from "./judge0Client.js";
 import { evaluateResult } from "./evaluateResult.js";
+import { EXAM_WINDOW_MS } from "../lib/constants.js";
 
 // Validates attempt ID and checks ownership by the authenticated employee
 async function getAttempt(req: Request, res: Response, questionId?: number) {
@@ -62,6 +63,11 @@ async function getAttempt(req: Request, res: Response, questionId?: number) {
   return { attempt, attemptId, employeeId };
 }
 
+async function checkValidSubmitTime(startTime: Date) {
+  const submitTime = new Date(startTime).getTime() + EXAM_WINDOW_MS;
+  return Date.now() < submitTime;
+}
+
 // POST /grading/:attemptId/questions/:questionId/run
 export const runCode = async (req: Request, res: Response) => {
   try {
@@ -77,6 +83,15 @@ export const runCode = async (req: Request, res: Response) => {
 
     const ctx = await getAttempt(req, res, questionId);
     if (!ctx) return;
+
+    if (!ctx.attempt.startTime) {
+      return res.status(404).json({ message: "Starttime not present" });
+    }
+
+    const checkTime = await checkValidSubmitTime(ctx.attempt.startTime);
+    if (!checkTime) {
+      return res.status(400).json({ message: "Time's up for submission" });
+    }
 
     if (ctx.attempt.status !== AttemptStatus.IN_PROGRESS) {
       return res.status(409).json({ message: "Attempt is not in progress" });
@@ -114,13 +129,22 @@ export const runAllTests = async (req: Request, res: Response) => {
   if (!Number.isInteger(questionId) || questionId <= 0) {
     return res.status(400).json({ message: "Invalid question ID" });
   }
-  
+
   if (typeof sourceCode !== "string" || !sourceCode.trim()) {
     return res.status(400).json({ message: "sourceCode required" });
   }
 
   const ctx = await getAttempt(req, res, questionId);
   if (!ctx) return;
+
+  if (!ctx.attempt.startTime) {
+    return res.status(404).json({ message: "Starttime not present" });
+  }
+
+  const checkTime = await checkValidSubmitTime(ctx.attempt.startTime);
+  if (!checkTime) {
+    return res.status(400).json({ message: "Time's up for submission" });
+  }
 
   if (ctx.attempt.status !== AttemptStatus.IN_PROGRESS) {
     return res.status(409).json({ message: "Attempt is not in progress" });
@@ -142,7 +166,7 @@ export const runAllTests = async (req: Request, res: Response) => {
   const languageId = getConfiguredLanguageId();
 
   const results = [];
-  
+
   for (let testCase of testCases) {
     const { input, visibility } = testCase
     const submission = await submitCode({
@@ -150,13 +174,13 @@ export const runAllTests = async (req: Request, res: Response) => {
       language_id: languageId,
       stdin: input,
     });
-  
+
     const output = await waitForSubmissionResult(submission.token);
     let result = evaluateResult(output, testCase.expectedOutput);
-    const visibleinput = visibility === Visibility.VISIBLE ? input : 'HIDDEN'; 
-    result.actualOutput = visibility === Visibility.VISIBLE ? result.actualOutput: 'HIDDEN';
+    const visibleinput = visibility === Visibility.VISIBLE ? input : 'HIDDEN';
+    result.actualOutput = visibility === Visibility.VISIBLE ? result.actualOutput : 'HIDDEN';
 
-    
+
     if (visibility === Visibility.VISIBLE) {
       results.push({
         visibleinput,
@@ -198,6 +222,15 @@ export const saveDraft = async (req: Request, res: Response) => {
       return res.status(409).json({ message: "Attempt is not in progress" });
     }
 
+    if (!ctx.attempt.startTime) {
+      return res.status(404).json({ message: "Starttime not present" });
+    }
+
+    const checkTime = await checkValidSubmitTime(ctx.attempt.startTime);
+    if (!checkTime) {
+      return res.status(400).json({ message: "Time's up for submission" });
+    }
+
     const existingDraft = await prisma.submission.findFirst({
       where: { attemptId: ctx.attemptId, questionId, isDraft: true },
       orderBy: [{ submittedAt: "desc" }, { id: "desc" }],
@@ -205,17 +238,17 @@ export const saveDraft = async (req: Request, res: Response) => {
 
     const draft = existingDraft
       ? await prisma.submission.update({
-          where: { id: existingDraft.id },
-          data: { submittedAnswer: sourceCode, submittedAt: new Date() },
-        })
+        where: { id: existingDraft.id },
+        data: { submittedAnswer: sourceCode, submittedAt: new Date() },
+      })
       : await prisma.submission.create({
-          data: {
-            attemptId: ctx.attemptId,
-            questionId,
-            submittedAnswer: sourceCode,
-            isDraft: true,
-          },
-        });
+        data: {
+          attemptId: ctx.attemptId,
+          questionId,
+          submittedAnswer: sourceCode,
+          isDraft: true,
+        },
+      });
 
     return res.status(200).json({
       message: "Draft saved successfully",
@@ -240,6 +273,15 @@ export const submitAttempt = async (req: Request, res: Response) => {
 
     if (attempt.status !== AttemptStatus.IN_PROGRESS) {
       return res.status(409).json({ message: "Attempt cannot be submitted in its current state" });
+    }
+
+    if (!attempt.startTime) {
+      return res.status(404).json({ message: "Starttime not present" });
+    }
+
+    const checkTime = await checkValidSubmitTime(attempt.startTime);
+    if (!checkTime) {
+      return res.status(400).json({ message: "Time's up for submission" });
     }
 
     await prisma.$transaction(async (tx) => {

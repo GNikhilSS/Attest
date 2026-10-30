@@ -14,3 +14,8 @@ export interface AttemptQuestion {
     }[];
   };
 }
+
+export interface AttemptQuestionWithTime {
+  startTime: string | null;
+  attemptQuestions: AttemptQuestion[];
+}

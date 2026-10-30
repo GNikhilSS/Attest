@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { validateInputBody } from "../lib/middleware/validations.js";
 import { AttemptCreationSchema } from "./attempts.schema.js";
-import { approveAttemptRequest, createAttemptRequest, getAttemptRequest, getEmployeeAttemptRequests, getManagerAttemptRequests, removeAttemptRequest, startAttemptExam, viewAttemptExam, expireOverdueAttempts, recordAttemptEvent } from "./attempts.controller.js";
+import { approveAttemptRequest, createAttemptRequest, getAttemptRequest, getEmployeeAttemptRequests, getManagerAttemptRequests, removeAttemptRequest, startAttemptExam, viewAttemptExam, recordAttemptEvent } from "./attempts.controller.js";
 
 export const attemptRouter = Router();
 

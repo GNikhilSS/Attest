@@ -24,7 +24,7 @@ import {
   Prisma,
   type Prisma as PrismaTypes,
 } from "../../generated/prisma/client.js";
-import { EXAM_WINDOW_MS } from "../lib/constants.js";
+import { EXAM_START_WINDOW_MS } from "../lib/constants.js";
 import { prisma } from "../lib/prisma.js";
 
 // Types
@@ -232,7 +232,7 @@ function buildUpdateData(
     ...(toState === AttemptStatus.CREATED
       ? {
           deadline: new Date(
-            transitionTime.getTime() + EXAM_WINDOW_MS,
+            transitionTime.getTime() + EXAM_START_WINDOW_MS,
           ),
         }
       : {}),

@@ -42,7 +42,7 @@
       <ng-template #noReport><p>No grading report is available yet. Refresh after grading completes.</p></ng-template>
     </section>
 
-    <!-- <section class="panel" aria-labelledby="integrity-heading">
+    <section class="panel" aria-labelledby="integrity-heading">
       <h2 id="integrity-heading">Integrity summary</h2>
       <ng-container *ngIf="attempt.gradingReport?.integritySummary as summary; else noIntegrity">
         <p>{{ summary.totalEvents }} recorded events, including lifecycle transitions.</p>
@@ -54,7 +54,7 @@
         <p class="muted">Signals are evidence for review, not an automatic pass or fail verdict.</p>
       </ng-container>
       <ng-template #noIntegrity><p>No integrity summary is available.</p></ng-template>
-    </section> -->
+    </section>
 
     <section class="panel" aria-labelledby="answers-heading">
       <h2 id="answers-heading">Submitted answers</h2>

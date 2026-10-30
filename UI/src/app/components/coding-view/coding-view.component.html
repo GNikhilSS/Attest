@@ -3,7 +3,7 @@
     <app-exam-header
       title="Skill Verification Exam"
       [remainingSeconds]="remainingSeconds()"
-      (submitExam)="submitSolution()"
+      (submitExam)="requestSubmit()"
     />
 
     <app-question-navigation
@@ -57,6 +57,7 @@
             [options]="editorOptions()"
             [ngModel]="code()"
             (ngModelChange)="onCodeChange($event)"
+            (onInit)="onEditorInit($event)"
             class="h-100 w-100">
           </ngx-monaco-editor>
         </div>
@@ -76,6 +77,42 @@
           </textarea>
         </div>
       </section>
+    </div>
+  </div>
+}
+
+@if (showSubmitConfirmation()) {
+  <div class="modal-backdrop">
+    <div
+      class="confirmation-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="submit-modal-title"
+    >
+      <h2 id="submit-modal-title">Submit Exam?</h2>
+
+      <p>
+        Are you sure you want to submit your exam?
+        You won't be able to continue editing after submission.
+      </p>
+
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn-cancel"
+          (click)="cancelSubmit()"
+        >
+          Cancel
+        </button>
+
+        <button
+          type="button"
+          class="btn-confirm"
+          (click)="confirmSubmit()"
+        >
+          Yes, Submit
+        </button>
+      </div>
     </div>
   </div>
 }

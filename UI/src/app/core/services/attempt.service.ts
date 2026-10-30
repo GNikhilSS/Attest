@@ -3,7 +3,7 @@ import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { Attempt, AttemptDecision } from '../../models/attempt.model';
 import { GradingReview } from '../../models/grading-review.model';
-import { AttemptQuestion } from '../../models/attempt-question.model';
+import { AttemptQuestion, AttemptQuestionWithTime } from '../../models/attempt-question.model';
 
 @Injectable({
   providedIn: 'root'
@@ -66,10 +66,10 @@ export class AttemptService {
   }
 
   startAttemptExam(attemptId: number) {
-    return this.http.post<{attemptQuestions: AttemptQuestion[]}>(`${this.apiUrl}/${attemptId}/start`, {});
+    return this.http.post<AttemptQuestionWithTime>(`${this.apiUrl}/${attemptId}/start`, {});
   }
 
   viewAttemptExam(attemptId: number) {
-    return this.http.get<{attemptQuestions: AttemptQuestion[]}>(`${this.apiUrl}/${attemptId}/view`, {});
+    return this.http.get<AttemptQuestionWithTime>(`${this.apiUrl}/${attemptId}/view`, {});
   }
 }
