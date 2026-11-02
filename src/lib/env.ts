@@ -8,3 +8,8 @@ if (!secret) {
 export const JWT_SECRET: string = secret;
 
 export const JWT_EXPIRY: number = Number(process.env.JWT_EXPIRY) || 3600 * 24 * 7;
+
+export const ACCESS_TOKEN_EXPIRY: number = Number(process.env.ACCESS_TOKEN_EXPIRY) || 3600;
+export const REFRESH_TOKEN_EXPIRY: number = Number(process.env.REFRESH_TOKEN_EXPIRY) || 3600 * 24;
+
+export const PASS_SALT: number = Number(process.env.PASS_SALT) || 10;

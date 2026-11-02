@@ -16,42 +16,98 @@
 import type { Request, Response } from 'express';
 import jwt  from 'jsonwebtoken';
 import { prisma } from "../lib/prisma.js";
-import { JWT_EXPIRY, JWT_SECRET } from '../lib/env.js';
+import { ACCESS_TOKEN_EXPIRY, JWT_SECRET, PASS_SALT, REFRESH_TOKEN_EXPIRY } from '../lib/env.js';
+import type { TokenPayload } from './auth.types.js';
+import bcrypt from 'bcryptjs';
 
-
-export const login = async (req: Request, res: Response) => {
-    const employeeId = Number(req.body?.employeeId);
-    if (!Number.isInteger(employeeId) || employeeId <= 0) {
-        return res.status(400).json({ message: "Invalid EmpId (format)" })
+export const refresh = async (req: Request, res: Response) => {
+    const refreshToken = req.cookies['refreshToken'];
+    if (!refreshToken) {
+        return res.status(401).send('No refresh token')
     }
 
-    const employee = await prisma.employee.findUnique({where: { id: employeeId }});
+    const decoded = jwt.verify(refreshToken, JWT_SECRET);
+
+    if (
+        typeof decoded !== 'object' ||
+        typeof decoded === null ||
+        typeof (decoded as TokenPayload).employeeId !== "number"
+    ) {
+        return res.status(401).json({ message: "jwt decoded err" });
+    }
+
+    const employee = await prisma.employee.findUnique({where: { id: decoded.employeeId }});
     if (!employee) {
         return res.status(401).json({ message: 'Invalid EmpId' });
     };
 
+    const accessToken = jwt.sign(
+        { employeeId: decoded.employeeId },
+        JWT_SECRET,
+        { algorithm: "HS256", expiresIn: ACCESS_TOKEN_EXPIRY }
+    );
+
+    return res
+      .header('Authorization', `Bearer ${accessToken}`)
+      .status(204)
+      .send();
+}
+
+export const login = async (req: Request, res: Response) => {
+    const employeeId = Number(req.body.employeeId);
+    const password = req.body.password;
+
+    // Add password
+    const employee = await prisma.employee.findUnique({where: { id: employeeId }});
+    if (!employee) {
+        return res.status(401).json({ message: 'Invalid Creds' });
+    };
+
+    const isMatch = await bcrypt.compare(password, employee.password);
+    if (!isMatch) {
+        return res.status(400).json({ message: 'Incorrect Password' });
+    }
+
     const token = jwt.sign(
         { employeeId: employee.id }, 
         JWT_SECRET, 
-        { algorithm: "HS256", expiresIn: JWT_EXPIRY}
+        { algorithm: "HS256", expiresIn: ACCESS_TOKEN_EXPIRY}
     )
 
-    res.json({ employee, token });
+    const refreshToken = jwt.sign(
+        { employeeId: employee.id }, 
+        JWT_SECRET, 
+        { algorithm: "HS256", expiresIn: REFRESH_TOKEN_EXPIRY}
+    )
+
+
+    return res
+      .cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'strict' })
+      .header('Authorization', `Bearer ${token}`)
+      .json({ employeeId: employee.id, name: employee.name });
 }
 
 export const register = async (req: Request, res: Response) => {
-    const employeeName = req.body?.employeeName;
-    if (!employeeName) {
-        return res.status(401).json({ message: 'Invalid Name (format)'})
-    }
+    const { employeeName, password } = req.body;
 
-    const employee = await prisma.employee.create({ data: { name: employeeName } });
+    const hashedPassword = await bcrypt.hash(password, PASS_SALT)
+
+    const employee = await prisma.employee.create({ data: { name: employeeName, password: hashedPassword } });
 
     const token = jwt.sign(
         { employeeId: employee.id }, 
         JWT_SECRET, 
-        { algorithm: "HS256", expiresIn: JWT_EXPIRY}
+        { algorithm: "HS256", expiresIn: ACCESS_TOKEN_EXPIRY}
     )
 
-    res.json({ employee, token });
+    const refreshToken = jwt.sign(
+        { employeeId: employee.id }, 
+        JWT_SECRET, 
+        { algorithm: "HS256", expiresIn: REFRESH_TOKEN_EXPIRY}
+    )
+
+    return res
+      .cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'strict' })
+      .header('Authorization', `Bearer ${token}`)
+      .json({ employeeId: employee.id, name: employee.name });
 }

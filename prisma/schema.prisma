@@ -15,6 +15,7 @@ datasource db {
 model Employee {
   id Int @id @default(autoincrement())
   name String
+  password String @default("1234")
   managedById Int?
 
   manager Employee? @relation("ManagerReports", fields: [managedById], references: [id])

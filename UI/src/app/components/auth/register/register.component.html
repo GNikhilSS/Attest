@@ -6,17 +6,34 @@
     *ngIf="registeredEmployeeId === null"
   >
     <h1>Register</h1>
-    
+
     <label for="employeeName">Employee name</label>
     <input
       id="employeeName"
       type="text"
       name="employeeName"
       [(ngModel)]="employeeName"
-      placeholder="Enter your full name"
-      maxlength="100"
+      placeholder="Enter your name"
+      minlength="4"
+      maxlength="25"
       required
     />
+
+    <label for="password">Password</label>
+    <input
+      id="password"
+      type="password"
+      name="password"
+      [(ngModel)]="password"
+      placeholder="Create a password"
+      minlength="4"
+      maxlength="16"
+      required
+    />
+
+    <p class="password-hint">
+      Password must be 4–16 characters and contain at least one uppercase letter.
+    </p>
 
     <p class="error-message" *ngIf="errorMessage" role="alert">
       {{ errorMessage }}
@@ -38,6 +55,7 @@
     aria-labelledby="success-heading"
   >
     <h1 id="success-heading">Registration successful!</h1>
+
     <p class="subtitle">
       Your account has been created. Keep your employee ID for future logins.
     </p>
