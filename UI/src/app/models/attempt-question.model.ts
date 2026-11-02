@@ -7,6 +7,10 @@ export interface AttemptQuestion {
     questionType: 'SCRATCH' | 'DEBUG';
     questionContent: string;
     starterCode: string | null;
+    skill?: {
+      id: number;
+      skillName: string;
+    };
     testCases: {
       id: number;
       input: string;
@@ -17,5 +21,6 @@ export interface AttemptQuestion {
 
 export interface AttemptQuestionWithTime {
   startTime: string | null;
+  skillName?: string;
   attemptQuestions: AttemptQuestion[];
 }

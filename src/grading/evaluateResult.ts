@@ -7,7 +7,13 @@ export type TestCaseResult = {
 };
 
 function normalizeOutput(output: string): string {
-  return output.replace(/\r\n/g, "\n").trim();
+  const trimmed = output.replace(/\r\n/g, "\n").trim();
+  try {
+    const jsonFormatted = trimmed.replace(/'/g, '"');
+    return JSON.stringify(JSON.parse(jsonFormatted));
+  } catch {
+    return trimmed;
+  }
 }
 
 export function evaluateResult(

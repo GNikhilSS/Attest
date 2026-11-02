@@ -28,6 +28,8 @@ import { gradeAttempt } from "./gradingWorker.js";
 import { getConfiguredLanguageId, submitCode, waitForSubmissionResult } from "./judge0Client.js";
 import { evaluateResult } from "./evaluateResult.js";
 import { EXAM_WINDOW_MS } from "../lib/constants.js";
+import { resolveLanguageId } from "./languageMap.js";
+import { wrapWithHarness } from "./harness.js";
 
 // Validates attempt ID and checks ownership by the authenticated employee
 async function getAttempt(req: Request, res: Response, questionId?: number) {
@@ -42,6 +44,7 @@ async function getAttempt(req: Request, res: Response, questionId?: number) {
   const attempt = await prisma.attempt.findUnique({
     where: { id: attemptId },
     include: {
+      skill: true,
       questions: questionId ? { where: { questionId } } : { select: { questionId: true } },
       gradingReport: true,
     },
@@ -97,10 +100,18 @@ export const runCode = async (req: Request, res: Response) => {
       return res.status(409).json({ message: "Attempt is not in progress" });
     }
 
-    const languageId = getConfiguredLanguageId();
+    const skillName = ctx.attempt.skill?.skillName || req.body.language;
+    let languageId: number;
+    try {
+      languageId = resolveLanguageId(skillName);
+    } catch {
+      languageId = getConfiguredLanguageId();
+    }
+
+    const wrappedCode = wrapWithHarness(sourceCode, languageId);
 
     const submission = await submitCode({
-      source_code: sourceCode,
+      source_code: wrappedCode,
       language_id: languageId,
       stdin,
     });
@@ -163,14 +174,22 @@ export const runAllTests = async (req: Request, res: Response) => {
     return res.status(404).json({ message: "Testcases not found" });
   }
 
-  const languageId = getConfiguredLanguageId();
+  const skillName = ctx.attempt.skill?.skillName;
+  let languageId: number;
+  try {
+    languageId = resolveLanguageId(skillName);
+  } catch {
+    languageId = getConfiguredLanguageId();
+  }
+
+  const wrappedCode = wrapWithHarness(sourceCode, languageId);
 
   const results = [];
 
   for (let testCase of testCases) {
     const { input, visibility } = testCase
     const submission = await submitCode({
-      source_code: sourceCode,
+      source_code: wrappedCode,
       language_id: languageId,
       stdin: input,
     });

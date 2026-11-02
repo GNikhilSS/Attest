@@ -20,7 +20,6 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AttemptQuestion } from '../../models/attempt-question.model';
 
 import type * as monaco from 'monaco-editor';
-import { KeyCode } from 'monaco-editor';
 
 import { DestroyRef } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -61,7 +60,36 @@ export class CodingViewComponent {
     () => this.attemptQuestions()[this.selectedQuestionIndex()]
   )
 
-  language = signal('javascript');
+  language = signal('python');
+
+  mapSkillToMonaco(skillName?: string | null): string {
+    if (!skillName) return 'python';
+    const s = skillName.trim().toLowerCase();
+    if (s.includes('python')) return 'python';
+    if (s.includes('typescript') || s === 'ts') return 'typescript';
+    if (s.includes('node') || s.includes('javascript') || s === 'js') return 'javascript';
+    if (s.includes('java') && !s.includes('script')) return 'java';
+    if (s.includes('c++') || s.includes('cpp')) return 'cpp';
+    if (s.includes('c#') || s.includes('csharp')) return 'csharp';
+    if (s === 'c') return 'c';
+    if (s.includes('go') || s.includes('golang')) return 'go';
+    if (s.includes('sql') || s.includes('postgres') || s.includes('sqlite')) return 'sql';
+    return 'plaintext';
+  }
+
+  detectLanguageFromCode(source?: string | null): string | null {
+    if (!source) return null;
+    if (/^\s*def\s+[a-zA-Z_]\w*\s*\(|import\s+sys|elif\s+/m.test(source)) return 'python';
+    if (/public\s+class\s+|System\.out\.println/m.test(source)) return 'java';
+    if (/#include\s+<|std::/m.test(source)) return 'cpp';
+    if (/package\s+main|func\s+[a-zA-Z_]\w*\s*\(/m.test(source)) return 'go';
+    if (/SELECT\s+.*\s+FROM\s+/im.test(source)) return 'sql';
+    return null;
+  }
+
+  onLanguageChange(newLanguage: string): void {
+    this.language.set(newLanguage);
+  }
   code = signal('');
   codeRunInput = signal('')
   codeRunOutput = signal<CodeExecutionResult | null>(null);
@@ -299,14 +327,13 @@ export class CodingViewComponent {
           return;
         }
 
+        if (attempt.skill?.skillName) {
+          this.language.set(this.mapSkillToMonaco(attempt.skill.skillName));
+        }
+
         if (attempt.status === 'CREATED') {
           this.startExam(attemptId);
         } else if (attempt.status === 'IN_PROGRESS') {
-          if (!attempt.startTime) {
-            console.error('In-progress attempt has no start time');
-            return;
-          }
-
           this.viewExam(attemptId);
         } else {
           console.error(`Cannot open exam in status: ${attempt.status}`);
@@ -322,6 +349,9 @@ export class CodingViewComponent {
     this.attemptService.startAttemptExam(attemptId).subscribe({
       next: response => {
         this.examEventService.track(attemptId, 'EXAM_STARTED');
+        if (response.skillName) {
+          this.language.set(this.mapSkillToMonaco(response.skillName));
+        }
         this.setExamQuestions(response.attemptQuestions);
         this.initializeTimer(response.startTime);
         this.enterFullscreen();
@@ -334,6 +364,9 @@ export class CodingViewComponent {
     this.attemptService.viewAttemptExam(attemptId).subscribe({
       next: response => {
         this.examEventService.track(attemptId, 'EXAM_STARTED');
+        if (response.skillName) {
+          this.language.set(this.mapSkillToMonaco(response.skillName));
+        }
         this.setExamQuestions(response.attemptQuestions);
         this.initializeTimer(response.startTime);
         this.enterFullscreen();
@@ -422,6 +455,16 @@ export class CodingViewComponent {
     );
 
     this.codeRunOutput.set(null);
+
+    const questionSkill = item.question?.skill?.skillName;
+    if (questionSkill) {
+      this.language.set(this.mapSkillToMonaco(questionSkill));
+    } else {
+      const detected = this.detectLanguageFromCode(item.question.starterCode);
+      if (detected) {
+        this.language.set(detected);
+      }
+    }
   }
 
   // Drafts
@@ -451,13 +494,10 @@ export class CodingViewComponent {
   readonly remainingSeconds = signal(90 * 60);
 
   private initializeTimer(startTime: string | null): void {
-    if (!startTime) {
-      console.error('Cannot initialize timer: start time is missing');
-      return;
-    }
+    const effectiveStartTime = startTime || new Date().toISOString();
 
     const durationMs = 90 * 60 * 1000;
-    const deadline = new Date(startTime).getTime() + durationMs;
+    const deadline = new Date(effectiveStartTime).getTime() + durationMs;
 
     const updateTimer = () => {
       const remaining = Math.max(
@@ -535,8 +575,9 @@ export class CodingViewComponent {
   onEditorInit(editorInstance: monaco.editor.IStandaloneCodeEditor): void {
 
     editorInstance.onKeyDown(event => {
+      const isV = event.browserEvent?.key === 'v' || event.browserEvent?.key === 'V' || event.keyCode === 52;
       if (
-        event.keyCode === KeyCode.KeyV &&
+        isV &&
         (event.ctrlKey || event.metaKey)
       ) {
         this.onEditorPaste();

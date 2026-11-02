@@ -7,7 +7,9 @@
     "test": "vitest run",
     "postinstall": "prisma skills sync || exit 0",
     "seed": "tsx prisma/seed.ts",
-    "seed:employees": "tsx prisma/seed-employees.ts"
+    "seed:employees": "tsx prisma/seed-employees.ts",
+    "seed:skills": "tsx prisma/seed-skills.ts",
+    "generate:assessment": "tsx src/assessment/cli.ts"
   },
   "keywords": [],
   "author": "",
