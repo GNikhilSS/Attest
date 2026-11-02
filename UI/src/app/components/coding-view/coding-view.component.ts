@@ -61,6 +61,7 @@ export class CodingViewComponent {
   )
 
   language = signal('python');
+  examSkillName = signal<string | null>(null);
 
   mapSkillToMonaco(skillName?: string | null): string {
     if (!skillName) return 'python';
@@ -87,9 +88,6 @@ export class CodingViewComponent {
     return null;
   }
 
-  onLanguageChange(newLanguage: string): void {
-    this.language.set(newLanguage);
-  }
   code = signal('');
   codeRunInput = signal('')
   codeRunOutput = signal<CodeExecutionResult | null>(null);
@@ -328,6 +326,7 @@ export class CodingViewComponent {
         }
 
         if (attempt.skill?.skillName) {
+          this.examSkillName.set(attempt.skill.skillName);
           this.language.set(this.mapSkillToMonaco(attempt.skill.skillName));
         }
 
@@ -350,6 +349,7 @@ export class CodingViewComponent {
       next: response => {
         this.examEventService.track(attemptId, 'EXAM_STARTED');
         if (response.skillName) {
+          this.examSkillName.set(response.skillName);
           this.language.set(this.mapSkillToMonaco(response.skillName));
         }
         this.setExamQuestions(response.attemptQuestions);
@@ -365,6 +365,7 @@ export class CodingViewComponent {
       next: response => {
         this.examEventService.track(attemptId, 'EXAM_STARTED');
         if (response.skillName) {
+          this.examSkillName.set(response.skillName);
           this.language.set(this.mapSkillToMonaco(response.skillName));
         }
         this.setExamQuestions(response.attemptQuestions);
@@ -456,7 +457,7 @@ export class CodingViewComponent {
 
     this.codeRunOutput.set(null);
 
-    const questionSkill = item.question?.skill?.skillName;
+    const questionSkill = item.question?.skill?.skillName ?? this.examSkillName();
     if (questionSkill) {
       this.language.set(this.mapSkillToMonaco(questionSkill));
     } else {

@@ -36,20 +36,6 @@
         <div class="editor-toolbar">
           <div class="editor-heading">
             <h3>Code editor</h3>
-            <select
-              class="form-select form-select-sm language-select"
-              [ngModel]="language()"
-              (ngModelChange)="onLanguageChange($event)"
-              style="width: auto; font-size: 0.85rem; padding: 2px 28px 2px 8px; border-radius: 6px; font-weight: 500;"
-            >
-              <option value="python">Python</option>
-              <option value="javascript">Node.js</option>
-              <option value="typescript">TypeScript</option>
-              <option value="java">Java</option>
-              <option value="cpp">C++</option>
-              <option value="go">Go</option>
-              <option value="sql">SQL</option>
-            </select>
           </div>
 
           <div class="editor-actions">
