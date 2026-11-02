@@ -11,10 +11,17 @@ import { skillsRouter } from "./skills/skills.routes.js";
 import { assessmentRouter } from "./assessment/assessment.routes.js";
 import './cron-jobs/expireAttempts.js';
 import { responseInterceptor } from "./lib/middleware/logger.js";
+import cookieParser from "cookie-parser";
 
 const app = express();
-app.use(cors())
+app.use(cors({
+    origin: ['http://localhost:4200'],
+    credentials: true,
+    exposedHeaders: ["Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization"]
+}))
 app.use(express.json());
+app.use(cookieParser());
 
 app.get("/health", (_req, res) => {
     return res.json({ status: "ok" });

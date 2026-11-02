@@ -1,3 +1,4 @@
+
 import { Component } from '@angular/core';
 import { AuthService } from '../../../core/services/auth.service';
 import { Router, RouterLink } from '@angular/router';
@@ -13,6 +14,7 @@ import { FormsModule } from '@angular/forms';
 })
 export class LoginComponent {
   employeeId: number | null = null;
+  password = '';
   loading = false;
   errorMessage = '';
 
@@ -24,21 +26,31 @@ export class LoginComponent {
   onSubmit(): void {
     this.errorMessage = '';
 
-    if (this.employeeId === null || this.employeeId <= 0) {
+    if (
+      this.employeeId === null ||
+      !Number.isInteger(this.employeeId) ||
+      this.employeeId <= 0
+    ) {
       this.errorMessage = 'Enter a valid employee ID.';
+      return;
+    }
+
+    if (!this.password || this.password.length < 4 || this.password.length > 16) {
+      this.errorMessage = 'Password must be between 4 and 16 characters.';
       return;
     }
 
     this.loading = true;
 
-    this.authService.login(this.employeeId).subscribe({
+    this.authService.login(this.employeeId, this.password).subscribe({
       next: () => {
         this.loading = false;
         this.router.navigate(['/dashboard']);
       },
       error: (error) => {
         this.loading = false;
-        this.errorMessage = error.error?.message ?? 'Login failed. Please try again.';
+        this.errorMessage =
+          error.error?.message ?? 'Login failed. Please try again.';
       }
     });
   }
