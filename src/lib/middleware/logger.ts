@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 import winston from "winston";
 import DailyRotateFile from "winston-daily-rotate-file";
 
-const { createLogger, transports } = winston;
+const { createLogger } = winston;
 const { combine, timestamp, json, printf } = winston.format
 
 const timestampFormat = 'MMM-DD-YYYY HH:mm:ss';

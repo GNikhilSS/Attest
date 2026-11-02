@@ -28,7 +28,7 @@ import { prisma } from "../lib/prisma.js";
 import { AttemptStatus } from "../../generated/prisma/client.js";
 
 import { transitionAttempt, transitionAttemptInTransaction } from "./attemptStateMachine.js";
-import { buildExam, getAttemptQuestions, isEmployeeAttempt, submitExamAfterDeadline } from "./attempts.helper.js";
+import { buildExam, getAttemptQuestions, isEmployeeAttempt } from "./attempts.helper.js";
 import { gradeAttempt } from "../grading/gradingWorker.js";
 
 export const createAttemptRequest = async (req: Request, res: Response) => {
@@ -161,9 +161,18 @@ export const startAttemptExam    = async (req: Request, res: Response) => {
     
     const attemptQuestions = await getAttemptQuestions(attemptId);
 
-    const { startTime } = attempt;
+    const updatedAttempt = await prisma.attempt.findUnique({
+        where: { id: attemptId },
+        select: {
+            startTime: true,
+            skill: { select: { skillName: true } }
+        }
+    });
 
-    return res.status(200).json({ startTime, attemptQuestions });
+    const startTime = updatedAttempt?.startTime || new Date();
+    const skillName = updatedAttempt?.skill?.skillName;
+
+    return res.status(200).json({ startTime, skillName, attemptQuestions });
 }
 
 export const viewAttemptExam = async (req: Request, res: Response) => {
@@ -186,8 +195,9 @@ export const viewAttemptExam = async (req: Request, res: Response) => {
     const attemptQuestions = await getAttemptQuestions(attemptId);
 
     const { startTime } = attempt;
+    const skillName = (attempt as any).skill?.skillName;
 
-    return res.status(200).json({ startTime, attemptQuestions });
+    return res.status(200).json({ startTime, skillName, attemptQuestions });
 }
 
 export const recordAttemptEvent = async (req: Request, res: Response) => {
@@ -224,7 +234,7 @@ export const recordAttemptEvent = async (req: Request, res: Response) => {
     return res.status(201).json({ event });
 }
 
-export const expireOverdueAttempts = async () => {
+export const expireOverdueAttempts = async (_req?: Request, res?: Response) => {
     const now = new Date();
     const overdueAttempts = await prisma.attempt.findMany({
         where: {
@@ -272,5 +282,8 @@ export const expireOverdueAttempts = async () => {
         }
     }
 
+    if (res) {
+        return res.status(200).json({ expiredCount: expiredIds.length, expiredAttemptIds: expiredIds });
+    }
     return { expiredCount: expiredIds.length, expiredAttemptIds: expiredIds };
 };

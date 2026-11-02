@@ -12,6 +12,8 @@ import {
 } from "./judge0Client.js";
 import { evaluateResult } from "./evaluateResult.js";
 import { transitionAttempt } from "../attempts/attemptStateMachine.js";
+import { resolveLanguageId } from "./languageMap.js";
+import { wrapWithHarness } from "./harness.js";
 
 type StoredTestResult = {
   testCaseId: number;
@@ -33,11 +35,13 @@ export async function gradeAttempt(attemptId: number) {
   const attempt = await prisma.attempt.findUnique({
     where: { id: attemptId },
     include: {
+      skill: true,
       gradingReport: true,
       questions: {
         include: {
           question: {
             include: {
+              skill: true,
               testCases: true,
             },
           },
@@ -125,11 +129,23 @@ export async function gradeAttempt(attemptId: number) {
       }
 
       const results: StoredTestResult[] = [];
+      const skillName = (question as any).skill?.skillName || (attempt as any).skill?.skillName;
+      let languageId: number;
+      try {
+        languageId = resolveLanguageId(skillName);
+      } catch {
+        languageId = configuredLanguageId;
+      }
 
       for (const testCase of testCases) {
+        const wrappedSource = wrapWithHarness(
+          latestSubmission.submittedAnswer,
+          languageId,
+        );
+
         const judgeSubmission = await submitCode({
-          source_code: latestSubmission.submittedAnswer,
-          language_id: configuredLanguageId,
+          source_code: wrappedSource,
+          language_id: languageId,
           stdin: testCase.input,
         });
 

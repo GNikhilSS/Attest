@@ -71,6 +71,23 @@ function getBaseUrl(): string {
   return baseUrl.replace(/\/+$/, "");
 }
 
+function getHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  const apiKey =
+    process.env.JUDGE0_API_KEY?.trim() || process.env.RAPIDAPI_KEY?.trim();
+  if (apiKey) {
+    headers["X-Auth-Token"] = apiKey;
+    headers["X-RapidAPI-Key"] = apiKey;
+    const host = process.env.RAPIDAPI_HOST?.trim();
+    if (host) {
+      headers["X-RapidAPI-Host"] = host;
+    }
+  }
+  return headers;
+}
+
 function validatePositiveNumber(value: number, name: string): void {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${name} must be a positive number`);
@@ -96,9 +113,7 @@ export async function submitCode(
     `${baseUrl}/submissions?base64_encoded=false&wait=false`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: getHeaders(),
       body: JSON.stringify(request),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     },
@@ -139,6 +154,7 @@ export async function getSubmissionResult(
   const response = await fetch(
     `${baseUrl}/submissions/${encodeURIComponent(token)}?base64_encoded=false`,
     {
+      headers: getHeaders(),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     },
   );

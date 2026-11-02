@@ -8,6 +8,7 @@ import { gradingRouter } from "./grading/grading.routes.js";
 import { decisionsRouter } from "./decisions/decisions.routes.js";
 import { errorHandler } from "./lib/errors.js";
 import { skillsRouter } from "./skills/skills.routes.js";
+import { assessmentRouter } from "./assessment/assessment.routes.js";
 import './cron-jobs/expireAttempts.js';
 import { responseInterceptor } from "./lib/middleware/logger.js";
 
@@ -25,6 +26,7 @@ app.use("/attempts", verify, attemptRouter);
 app.use("/skills", verify, skillsRouter);
 app.use("/grading", verify, gradingRouter);
 app.use("/decisions", verify, decisionsRouter);
+app.use("/assessment", assessmentRouter);
 
 app.use(errorHandler);
 

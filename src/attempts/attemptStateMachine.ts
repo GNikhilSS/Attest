@@ -107,6 +107,19 @@ const transitionRules: TransitionRule[] = [
 ];
 
 // Transition validation
+export function canTransition(
+  from: AttemptStatus,
+  to: AttemptStatus,
+  actor: ActorType,
+): boolean {
+  return transitionRules.some(
+    (rule) =>
+      rule.from === from &&
+      rule.to === to &&
+      rule.actor === actor,
+  );
+}
+
 export function validateTransition(
   from: AttemptStatus,
   to: AttemptStatus,
