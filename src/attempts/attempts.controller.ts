@@ -69,25 +69,31 @@ export const getAttemptRequest = async (req: Request, res: Response) => {
 }
 
 export const removeAttemptRequest = async (req: Request, res: Response) => {
-    const employeeId = (req as AuthedRequest).employee.employeeId;
+    const user = (req as AuthedRequest).employee;
     const attemptId = Number(req.params.attemptId);
 
+    // Super Admin can delete any request; Managers can only delete their reports' requests
+    const whereClause: any = {
+        id: attemptId,
+        status: AttemptStatus.REQUESTED
+    };
+
+    if (user.role !== 'SUPER_ADMIN') {
+        whereClause.attemptBy = {
+            managedById: user.employeeId
+        };
+    }
+
     const result = await prisma.attempt.deleteMany({
-        where: {
-            id: attemptId,
-            status: AttemptStatus.REQUESTED,
-            attemptBy: {
-                managedById: employeeId
-            }
-        }
-    })
+        where: whereClause
+    });
 
     if (result.count !== 1) {
-        return res.status(404).json({ message: "Attempt to delete not found"})
+        return res.status(404).json({ message: "Attempt to delete not found" });
     }
 
     res.status(204).end();
-}
+};
 
 export const getEmployeeAttemptRequests = async (req: Request, res: Response) => {
     const employeeId = (req as AuthedRequest).employee.employeeId;
@@ -286,4 +292,28 @@ export const expireOverdueAttempts = async (_req?: Request, res?: Response) => {
         return res.status(200).json({ expiredCount: expiredIds.length, expiredAttemptIds: expiredIds });
     }
     return { expiredCount: expiredIds.length, expiredAttemptIds: expiredIds };
+};
+export const getAllAttemptRequests = async (req: Request, res: Response) => {
+    const attempts = await prisma.attempt.findMany({
+        include: {
+            skill: true,
+            attemptBy: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            },
+            approvedBy: {
+                select: {
+                    id: true,
+                    name: true
+                }
+            }
+        },
+        orderBy: {
+            createdAt: 'desc'
+        }
+    });
+
+    return res.status(200).json({ attempts });
 };

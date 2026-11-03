@@ -7,6 +7,8 @@ import { Employee } from '../../models/employee.model';
 interface AuthResponse {
   employeeId: number;
   name: string;
+  role?: string;
+  hasReports?: boolean;
 }
 
 @Injectable({
@@ -40,7 +42,9 @@ export class AuthService {
         tap(res =>
           this.saveEmployee({
             employeeId: res.employeeId,
-            employeeName: res.name
+            employeeName: res.name,
+            role: res.role,
+            hasReports: res.hasReports
           } as Employee)
         )
       );
@@ -70,7 +74,9 @@ export class AuthService {
         tap(res =>
           this.saveEmployee({
             employeeId: res.employeeId,
-            employeeName: res.name
+            employeeName: res.name,
+            role: res.role,
+            hasReports: res.hasReports
           } as Employee)
         )
       );

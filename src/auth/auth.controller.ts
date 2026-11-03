@@ -57,8 +57,15 @@ export const login = async (req: Request, res: Response) => {
     const employeeId = Number(req.body.employeeId);
     const password = req.body.password;
 
-    // Add password
-    const employee = await prisma.employee.findUnique({where: { id: employeeId }});
+    // Fetch employee along with their report count
+    const employee = await prisma.employee.findUnique({
+        where: { id: employeeId },
+        include: {
+            _count: {
+                select: { reports: true }
+            }
+        }
+    });
     if (!employee) {
         return res.status(401).json({ message: 'Invalid Creds' });
     };
@@ -68,14 +75,16 @@ export const login = async (req: Request, res: Response) => {
         return res.status(400).json({ message: 'Incorrect Password' });
     }
 
+    const hasReports = (employee._count?.reports ?? 0) > 0;
+
     const token = jwt.sign(
-        { employeeId: employee.id }, 
+        { employeeId: employee.id, role: employee.role }, 
         JWT_SECRET, 
         { algorithm: "HS256", expiresIn: ACCESS_TOKEN_EXPIRY}
     )
 
     const refreshToken = jwt.sign(
-        { employeeId: employee.id }, 
+        { employeeId: employee.id, role: employee.role }, 
         JWT_SECRET, 
         { algorithm: "HS256", expiresIn: REFRESH_TOKEN_EXPIRY}
     )
@@ -84,8 +93,9 @@ export const login = async (req: Request, res: Response) => {
     return res
       .cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'strict' })
       .header('Authorization', `Bearer ${token}`)
-      .json({ employeeId: employee.id, name: employee.name });
-}
+      .json({ employeeId: employee.id, name: employee.name, role: employee.role, hasReports 
+      });
+};
 
 export const register = async (req: Request, res: Response) => {
     const { employeeName, password } = req.body;
@@ -95,13 +105,13 @@ export const register = async (req: Request, res: Response) => {
     const employee = await prisma.employee.create({ data: { name: employeeName, password: hashedPassword } });
 
     const token = jwt.sign(
-        { employeeId: employee.id }, 
+        { employeeId: employee.id, role: employee.role }, 
         JWT_SECRET, 
         { algorithm: "HS256", expiresIn: ACCESS_TOKEN_EXPIRY}
     )
 
     const refreshToken = jwt.sign(
-        { employeeId: employee.id }, 
+        { employeeId: employee.id, role: employee.role }, 
         JWT_SECRET, 
         { algorithm: "HS256", expiresIn: REFRESH_TOKEN_EXPIRY}
     )
@@ -109,5 +119,6 @@ export const register = async (req: Request, res: Response) => {
     return res
       .cookie('refreshToken', refreshToken, { httpOnly: true, sameSite: 'strict' })
       .header('Authorization', `Bearer ${token}`)
-      .json({ employeeId: employee.id, name: employee.name });
-}
+      .json({ employeeId: employee.id, name: employee.name, role: employee.role, hasReports: false
+      });
+};
