@@ -29,6 +29,27 @@
 
   <nav class="tabs" aria-label="Request categories">
     <button
+      *ngIf="employee?.role === 'ADMIN' || employee?.role === 'SUPER_ADMIN'"
+      type="button"
+      [class.active]="activeTab === 'all'"
+      [attr.aria-selected]="activeTab === 'all'"
+      role="tab"
+      (click)="setTab('all')"
+    >
+      All Requests
+    </button>
+
+    <button
+      *ngIf="employee?.role === 'SUPER_ADMIN'"
+      type="button"
+      [class.active]="activeTab === 'manage-employees'"
+      [attr.aria-selected]="activeTab === 'manage-employees'"
+      role="tab"
+      (click)="setTab('manage-employees')"
+    >
+      Manage Employees
+    </button>
+    <button
       type="button"
       [class.active]="activeTab === 'employee'"
       [attr.aria-selected]="activeTab === 'employee'"
@@ -39,6 +60,7 @@
     </button>
 
     <button
+      *ngIf="employee?.hasReports"
       type="button"
       [class.active]="activeTab === 'manager'"
       [attr.aria-selected]="activeTab === 'manager'"
@@ -116,7 +138,69 @@
     </div>
   </section>
 
-  <div
+    <section *ngIf="activeTab === 'all'">
+    <p *ngIf="allAttempts.length === 0" class="empty-state">
+      No requests found in the system.
+    </p>
+
+    <div class="attempt-list" *ngIf="allAttempts.length > 0">
+      <article 
+        class="attempt-card" 
+        *ngFor="let attempt of allAttempts"
+        (click)="openAttemptDetails(attempt)"
+        (keydown.enter)="openAttemptDetails(attempt)"
+        tabindex="0"
+        role="button"
+      >
+        <div>
+          <h2>{{ attempt.skill.skillName }}</h2>
+          <p>Candidate: {{ attempt.attemptBy?.name ?? ('Employee #' + attempt.employeeId) }}</p>
+          <p>Level {{ attempt.proficiencyLevel }}</p>
+          <p>Request #{{ attempt.id }}</p>
+        </div>
+
+        <span class="status-badge">{{ attempt.status }}</span>
+      </article>
+    </div>
+  </section>
+
+  <section *ngIf="activeTab === 'manage-employees'">
+    <p *ngIf="loadingEmployees">Loading employee directory...</p>
+    
+    <div *ngIf="mappingMessage" style="padding: 12px 16px; margin-bottom: 16px; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; border-radius: 8px;">
+      {{ mappingMessage }}
+    </div>
+
+    <div class="attempt-list" *ngIf="!loadingEmployees">
+      <article class="attempt-card" *ngFor="let emp of employeesList">
+        <div>
+          <h2>{{ emp.name }} <span style="font-size: 14px; font-weight: normal; color: #667085;">(ID: {{ emp.id }})</span></h2>
+          <p style="margin-top: 4px;">Role: <span class="status-badge" style="font-size: 12px;">{{ emp.role }}</span></p>
+          <p>Current Manager: <strong>{{ emp.manager?.name || 'None' }}</strong></p>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <label style="font-size: 14px; color: #475467; font-weight: 500;">Assign Manager:</label>
+          <select 
+            [ngModel]="emp.managedById" 
+            (ngModelChange)="onAssignManager(emp.id, $event)"
+            style="padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; background: white; cursor: pointer;"
+          >
+            <option [ngValue]="null">-- No Manager --</option>
+            <option 
+              *ngFor="let m of employeesList" 
+              [ngValue]="m.id" 
+              [disabled]="m.id === emp.id"
+            >
+              {{ m.name }} (ID: {{ m.id }})
+            </option>
+          </select>
+        </div>
+      </article>
+    </div>
+  </section>
+
+<div
     class="modal-backdrop"
     *ngIf="isCreateRequestOpen"
     (click)="closeCreateRequest()"
@@ -186,7 +270,7 @@
         <strong>{{ attempt.createdAt | date:'mediumDate' }}</strong>
       </div>
 
-      <div *ngIf="activeTab === 'manager' && attempt.attemptBy">
+      <div *ngIf="(activeTab === 'manager' || activeTab === 'all') && attempt.attemptBy">
         <div class="detail-row">
           <span>Employee</span>
           <strong>{{ attempt.attemptBy.name }}</strong>
@@ -244,7 +328,7 @@
         </p>
 
         <button
-          *ngIf="activeTab === 'manager' &&
+          *ngIf="(activeTab === 'manager' || activeTab === 'all') &&
                 (attempt.status === 'SUBMITTED' || attempt.status === 'GRADED' || attempt.status === 'DECIDED')"
           type="button"
           class="primary-button"
@@ -255,7 +339,7 @@
 
 
         <button
-          *ngIf="activeTab === 'manager' && attempt.status === 'REQUESTED'"
+          *ngIf="(activeTab === 'manager' || (activeTab === 'all' && employee?.role === 'SUPER_ADMIN')) && attempt.status === 'REQUESTED'"
           type="button"
           class="danger-button"
           [disabled]="deleteAttemptLoading"

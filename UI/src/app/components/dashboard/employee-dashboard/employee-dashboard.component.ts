@@ -6,21 +6,27 @@ import { CreateRequestComponent } from '../create-request/create-request.compone
 import { Router } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { Employee } from '../../../models/employee.model';
+import { FormsModule } from '@angular/forms';
+import { EmployeeService, EmployeeListItem } from '../../../core/services/employee.service';
 
 @Component({
   selector: 'app-employee-dashboard',
   standalone: true,
-  imports: [CommonModule, CreateRequestComponent],
+  imports: [CommonModule, FormsModule, CreateRequestComponent],
   templateUrl: './employee-dashboard.component.html',
   styleUrl: './employee-dashboard.component.css'
 })
 export class EmployeeDashboardComponent implements OnInit {
-  activeTab: 'employee' | 'manager' = 'employee';
+  activeTab: string = 'employee';
 
   employee: Employee | null = null;
 
   employeeAttempts: Attempt[] = [];
   managerAttempts: Attempt[] = [];
+  allAttempts: Attempt[] = [];
+  employeesList: EmployeeListItem[] = [];
+  loadingEmployees = false;
+  mappingMessage = '';
 
   loadingEmployee = false;
   loadingManager = false;
@@ -31,7 +37,8 @@ export class EmployeeDashboardComponent implements OnInit {
   constructor(
     private attemptService: AttemptService,
     private authService: AuthService,
-    private router: Router
+    private router: Router,
+    private employeeService: EmployeeService
   ) {}
 
   // logout
@@ -43,10 +50,19 @@ export class EmployeeDashboardComponent implements OnInit {
   // Call attempt apis
 
   ngOnInit(): void {
-    this.loadEmployeeAttempts();
-    this.loadManagerAttempts();
-    
     this.employee = this.authService.getEmployee();
+    this.loadEmployeeAttempts();
+    //only show managee's req if they have direct reports
+    if (this.employee?.hasReports) {
+      this.loadManagerAttempts();
+    }
+    if (this.employee?.role === 'ADMIN' || this.employee?.role === 'SUPER_ADMIN') {
+      this.activeTab = 'all';
+      this.attemptService.getAllAttempts().subscribe(res => this.allAttempts = res.attempts);
+    }
+    if (this.employee?.role === 'SUPER_ADMIN') {
+      this.loadEmployees();
+    }
   }
 
   loadEmployeeAttempts(): void {
@@ -81,8 +97,43 @@ export class EmployeeDashboardComponent implements OnInit {
     });
   }
 
-  setTab(tab: 'employee' | 'manager'): void {
+  loadEmployees(): void {
+    this.loadingEmployees = true;
+    this.employeeService.getAllEmployees().subscribe({
+      next: (res) => {
+        this.employeesList = res.employees;
+        this.loadingEmployees = false;
+      },
+      error: (err) => {
+        console.error('Failed to load employees', err);
+        this.loadingEmployees = false;
+      }
+    });
+  }
+
+  onAssignManager(employeeId: number, managerId: number | null): void {
+    this.mappingMessage = '';
+    this.employeeService.assignManager(employeeId, managerId).subscribe({
+      next: (res) => {
+        const emp = this.employeesList.find(e => e.id === employeeId);
+        if (emp) {
+          emp.managedById = res.employee.managedById;
+          emp.manager = res.employee.manager;
+        }
+        this.mappingMessage = `Updated manager for ${res.employee.name}!`;
+        setTimeout(() => { this.mappingMessage = ''; }, 3000);
+      },
+      error: (err) => {
+        alert(err.error?.message || 'Failed to assign manager');
+      }
+    });
+  }
+
+  setTab(tab: string): void {
     this.activeTab = tab;
+    if (tab === 'manage-employees' && this.employeesList.length === 0) {
+      this.loadEmployees();
+    }
   }
 
   // Create Attempt modal
@@ -184,6 +235,7 @@ export class EmployeeDashboardComponent implements OnInit {
           this.deleteAttemptLoading = false;
           this.closeAttemptDetails();
           this.loadManagerAttempts();
+          this.allAttempts = this.allAttempts.filter(a => a.id !== attempt.id);
         },
         error: () => {
           this.deleteAttemptLoading = false;

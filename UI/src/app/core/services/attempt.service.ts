@@ -42,6 +42,12 @@ export class AttemptService {
     );
   }
 
+  getAllAttempts(): Observable<{ attempts: Attempt[] }> {
+    return this.http.get<{ attempts: Attempt[] }>(
+      `${this.apiUrl}/all`
+    );
+  }
+
   createAttemptRequest(
     skillId: number,
     proficiencyLevel: number

@@ -16,6 +16,7 @@ import type { Request, Response, NextFunction } from 'express';
 import type { TokenPayload, AuthedRequest } from './auth.types.js';
 import jwt  from 'jsonwebtoken';
 import { JWT_SECRET } from '../lib/env.js';
+import type { Role } from '../../generated/prisma/enums.js';
 
 
 export const verify = (req: Request, res: Response, next: NextFunction) => {
@@ -45,3 +46,13 @@ export const verify = (req: Request, res: Response, next: NextFunction) => {
         next();
     })
 }
+
+export const requireRole = (...allowedRoles: Role[]) => {
+    return (req: Request, res: Response, next: NextFunction) => {
+        const user = (req as AuthedRequest).employee;
+        if (!user || !allowedRoles.includes(user.role)) {
+            return res.status(403).json({ message: "Forbidden: Insufficient permissions" });
+        }
+        next();
+    };
+};

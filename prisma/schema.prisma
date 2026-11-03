@@ -15,6 +15,7 @@ datasource db {
 model Employee {
   id Int @id @default(autoincrement())
   name String
+  role Role @default(EMPLOYEE)
   password String @default("1234")
   managedById Int?
 
@@ -160,4 +161,9 @@ enum GradingStatus {
   RUNNING
   COMPLETED
   FAILED
+}
+enum Role {
+  EMPLOYEE 
+  ADMIN
+  SUPER_ADMIN
 }

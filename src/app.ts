@@ -12,6 +12,7 @@ import { assessmentRouter } from "./assessment/assessment.routes.js";
 import './cron-jobs/expireAttempts.js';
 import { responseInterceptor } from "./lib/middleware/logger.js";
 import cookieParser from "cookie-parser";
+import { employeesRouter } from "./employees/employees.routes.js";
 
 const app = express();
 app.use(cors({
@@ -34,6 +35,7 @@ app.use("/skills", verify, skillsRouter);
 app.use("/grading", verify, gradingRouter);
 app.use("/decisions", verify, decisionsRouter);
 app.use("/assessment", assessmentRouter);
+app.use("/employees", verify, employeesRouter);
 
 app.use(errorHandler);
 

@@ -1,7 +1,8 @@
 import { Router } from "express";
 import { validateInputBody } from "../lib/middleware/validations.js";
 import { AttemptCreationSchema } from "./attempts.schema.js";
-import { approveAttemptRequest, createAttemptRequest, getAttemptRequest, getEmployeeAttemptRequests, getManagerAttemptRequests, removeAttemptRequest, startAttemptExam, viewAttemptExam, recordAttemptEvent } from "./attempts.controller.js";
+import { approveAttemptRequest, createAttemptRequest, getAttemptRequest, getEmployeeAttemptRequests, getManagerAttemptRequests, removeAttemptRequest, startAttemptExam, viewAttemptExam, recordAttemptEvent, getAllAttemptRequests,} from "./attempts.controller.js";
+import { requireRole } from "../auth/auth.middleware.js";
 
 export const attemptRouter = Router();
 
@@ -22,3 +23,5 @@ attemptRouter.post('/:attemptId/start', startAttemptExam);
 attemptRouter.get('/:attemptId/view', viewAttemptExam);
 
 attemptRouter.post('/:attemptId/events', recordAttemptEvent);
+
+attemptRouter.get('/all', requireRole('ADMIN', 'SUPER_ADMIN'), getAllAttemptRequests);
