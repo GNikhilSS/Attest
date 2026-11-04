@@ -1,4 +1,4 @@
-import { AttemptStatus, Visibility } from "../../generated/prisma/enums.js";
+import { AttemptStatus, Visibility, QuestionType } from "../../generated/prisma/enums.js";
 import { prisma } from "../lib/prisma.js";
 import { transitionAttempt } from "./attemptStateMachine.js";
 import { generateAndSaveAssessment } from "../assessment/assessmentBankService.js";
@@ -32,6 +32,22 @@ export const isManagerAttempt = async (attemptId: number, managerId: number) => 
     return attempt;
 }
 
+// One question per type in the exam mix. Order matters: it becomes the position.
+const EXAM_TYPES: QuestionType[] = [QuestionType.DEBUG, QuestionType.SCRATCH, QuestionType.MCQ];
+
+function pickOnePerType(bank: { id: number; questionType: QuestionType }[]) {
+    const chosen: { id: number; questionType: QuestionType }[] = [];
+    for (const type of EXAM_TYPES) {
+        const candidates = bank.filter((q) => q.questionType === type);
+        if (candidates.length === 0) {
+            return null;
+        }
+        const pick = candidates[Math.floor(Math.random() * candidates.length)]!;
+        chosen.push(pick);
+    }
+    return chosen;
+}
+
 export const buildExam = async (attemptId: number) => {
     const attempt = await prisma.attempt.findUnique({
         where: {
@@ -46,19 +62,22 @@ export const buildExam = async (attemptId: number) => {
         throw new Error("ATTEMPT_NOT_FOUND");
     }
 
-    let questions = await prisma.question.findMany({
-        where: {
-            skillId: attempt.skillId,
-            proficiencyLevel: attempt.proficiencyLevel
-        },
-        take: 2
-    });
+    const loadBank = () =>
+        prisma.question.findMany({
+            where: {
+                skillId: attempt.skillId,
+                proficiencyLevel: attempt.proficiencyLevel
+            },
+            select: { id: true, questionType: true }
+        });
 
-    // Automatic check-and-generate: if question bank has fewer than 2 questions, generate on the fly
-    if (questions.length < 2 && attempt.skill) {
+    let chosen = pickOnePerType(await loadBank());
+
+    // Automatic check-and-generate: if any type is missing, generate once and re-check
+    if (!chosen && attempt.skill) {
         try {
             console.log(
-                `[buildExam] Not enough questions in bank for ${attempt.skill.skillName} (Level ${attempt.proficiencyLevel}). Auto-generating via Gemini...`
+                `[buildExam] Missing question types for ${attempt.skill.skillName} (Level ${attempt.proficiencyLevel}). Auto-generating via Gemini...`
             );
             await generateAndSaveAssessment(
                 {
@@ -70,14 +89,7 @@ export const buildExam = async (attemptId: number) => {
                 }
             );
 
-            // Re-fetch questions after generation
-            questions = await prisma.question.findMany({
-                where: {
-                    skillId: attempt.skillId,
-                    proficiencyLevel: attempt.proficiencyLevel,
-                },
-                take: 2,
-            });
+            chosen = pickOnePerType(await loadBank());
         } catch (genError: any) {
             console.error(
                 `[buildExam] Automatic question generation failed: ${genError?.message}`
@@ -85,11 +97,11 @@ export const buildExam = async (attemptId: number) => {
         }
     }
 
-    if (questions.length !== 2) {
+    if (!chosen) {
         throw new Error("NOT_ENOUGH_QUESTIONS");
     }
 
-    for (const [idx, question] of questions.entries()) {
+    for (const [idx, question] of chosen.entries()) {
         await prisma.attemptQuestion.create({
             data: {
                 attemptId: attemptId,
