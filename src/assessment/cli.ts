@@ -2,6 +2,7 @@ import "dotenv/config";
 import { generateAssessment } from "./assessmentGenerator.js";
 import { AssessmentInputError } from "./assessmentPrompt.js";
 import { saveAssessmentToQuestionBank } from "./assessmentBankService.js";
+import type { QuestionType } from "../../generated/prisma/enums.js";
 
 function parseArgs(args: string[]) {
   const parsed: Record<string, string> = {};
@@ -25,6 +26,13 @@ async function runCli() {
   const topic = args.topic || args.focus;
   const shouldSave = args.save === "true" || args.persist === "true";
   const skillId = args.skillId ? Number(args.skillId) : undefined;
+
+  const questionsFormat = args.spec
+  ? args.spec.split(",").map((part) => {
+      const [type, count] = part.split(":");
+      return { type: type as QuestionType, count: Number(count) };
+    })
+  : undefined;
 
   if (!language || !levelStr) {
     console.log(`
@@ -59,13 +67,14 @@ Examples:
 
   const proficiencyLevel = Number(levelStr);
 
-  console.log(`\n⏳ Generating 2-question practical assessment for ${language} at Level ${proficiencyLevel} using Gemini 3.5 Flash...`);
+  console.log(`\n⏳ Generating few question practical assessment for ${language} at Level ${proficiencyLevel} using Gemini 3.5 Flash...`);
 
   try {
     const result = await generateAssessment({
       language,
       proficiencyLevel,
       topic,
+      questionsFormat,
     });
 
     console.log(`\n============================================================`);
@@ -87,6 +96,9 @@ Examples:
         if (q.starterCode) console.log(`Starter Code:\n\`\`\`\n${q.starterCode}\n\`\`\``);
         if (q.constraints?.length) console.log(`Constraints:`, q.constraints);
         console.log(`Visible Tests:`, JSON.stringify(q.visibleTestCases, null, 2));
+      } else if (q.questionType === "MCQ") {
+        if (q.codeSnippet) console.log(`Code:\n\`\`\`\n${q.codeSnippet}\n\`\`\``);
+        for (const opt of q.options) console.log(`  ${opt.id}. ${opt.text}`);
       }
     }
 
@@ -105,6 +117,10 @@ Examples:
       } else if (q.questionType === "SCRATCH") {
         console.log(`Reference Solution:\n\`\`\`\n${q.referenceSolution}\n\`\`\``);
         console.log(`Hidden Tests:`, JSON.stringify(q.hiddenTestCases, null, 2));
+      } else if (q.questionType === "MCQ") {
+        console.log(`Correct Option: ${q.correctOptionId}`);
+        console.log(`Explanation:\n${q.explanation}`);
+        console.log(`Wrong Option Reasons:`, JSON.stringify(q.wrongOptionReasons, null, 2));
       }
       console.log(`Grading Rubric (${q.totalPoints} points total):`, JSON.stringify(q.gradingRubric, null, 2));
     }

@@ -19,10 +19,12 @@ import { prisma } from "../lib/prisma.js";
 import { ACCESS_TOKEN_EXPIRY, JWT_SECRET, PASS_SALT, REFRESH_TOKEN_EXPIRY } from '../lib/env.js';
 import type { TokenPayload } from './auth.types.js';
 import bcrypt from 'bcryptjs';
+import { Logger } from '../lib/logger.js';
 
 export const refresh = async (req: Request, res: Response) => {
     const refreshToken = req.cookies['refreshToken'];
     if (!refreshToken) {
+        Logger.http('No refresh token')
         return res.status(401).send('No refresh token')
     }
 
@@ -67,6 +69,7 @@ export const login = async (req: Request, res: Response) => {
         }
     });
     if (!employee) {
+        Logger.error('Invalid creds')
         return res.status(401).json({ message: 'Invalid Creds' });
     };
 

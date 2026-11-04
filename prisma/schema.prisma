@@ -41,6 +41,7 @@ model Question {
   questionType QuestionType
   questionContent String
   starterCode String?
+  mcqData Json?
 
   skill Skill @relation(fields: [skillId], references: [id])
   testCases TestCase[]
@@ -133,6 +134,7 @@ model GradingReport {
 enum QuestionType {
   SCRATCH
   DEBUG
+  MCQ
 }
 
 enum Visibility {

@@ -1,3 +1,5 @@
+import type { QuestionType } from "../../generated/prisma/enums.js";
+
 export type ProficiencyLevelNumber = 1 | 2 | 3 | 4 | 5;
 
 export interface ProficiencyLevelInfo {
@@ -34,9 +36,30 @@ export const PROFICIENCY_LEVELS: Record<ProficiencyLevelNumber, ProficiencyLevel
   },
 };
 
+export interface QuestionSpecItem {
+  type: "DEBUG" | "SCRATCH" | "MCQ";
+  count: number;
+}
+
+export const DEFAULT_QUESTIONS_FORMAT: QuestionSpecItem[] = [
+  {
+    type: "MCQ",
+    count: 1
+  },
+  {
+    type: "SCRATCH",
+    count: 1
+  },
+  {
+    type: "DEBUG",
+    count: 1
+  },
+]
+
 export interface AssessmentInput {
   language: string;
   proficiencyLevel: number;
+  questionsFormat?: QuestionSpecItem[];
   topic?: string | undefined;
 }
 
@@ -57,33 +80,45 @@ export interface TestCaseItem {
 // Employee-Facing Models (No answers, hidden tests, or rubrics)
 // -------------------------------------------------------------
 
-export interface EmployeeDebugQuestion {
-  questionNumber: 1;
-  questionType: "DEBUG";
+interface BaseQuestion {
+  questionNumber: number;
+  questionType: QuestionType;
   title: string;
   problemStatement: string;
-  buggyCode: string;
   language: string;
+}
+
+export interface EmployeeDebugQuestion extends BaseQuestion {
+  questionType: "DEBUG";
+  buggyCode: string;
   employeeInstructions?: string;
   visibleTestCases: TestCaseItem[];
 }
 
-export interface EmployeeScratchQuestion {
-  questionNumber: 2;
+export interface EmployeeScratchQuestion extends BaseQuestion {
   questionType: "SCRATCH";
-  title: string;
-  problemStatement: string;
   inputOutputRequirements?: string;
   constraints?: string[];
   edgeCases?: string[];
   starterCode?: string;
-  language: string;
   visibleTestCases: TestCaseItem[];
+}
+
+export interface EmployeeMcqQuestion extends BaseQuestion {
+  questionType: "MCQ";
+  options: McqOption[]
+  codeSnippet?: string;
+}
+
+export interface McqOption {
+  id: "A" | "B" | "C" | "D"; 
+  text: string 
 }
 
 export type EmployeeQuestion =
   | EmployeeDebugQuestion
-  | EmployeeScratchQuestion;
+  | EmployeeScratchQuestion
+  | EmployeeMcqQuestion;
 
 export interface EmployeeFacingAssessment {
   metadata: {
@@ -93,39 +128,47 @@ export interface EmployeeFacingAssessment {
     proficiencyDescription: string;
     topic?: string;
     summary: string;
-    totalQuestions: 2;
+    totalQuestions: number;
   };
-  questions: [EmployeeDebugQuestion, EmployeeScratchQuestion];
+  questions: EmployeeQuestion[];
 }
 
 // -------------------------------------------------------------
 // Private Evaluation Package (Answers, rubrics, hidden tests)
 // -------------------------------------------------------------
 
-export interface PrivateDebugEvaluation {
-  questionNumber: 1;
-  questionType: "DEBUG";
+interface BasePrivateEvaluation {
+  questionNumber: number;
+  questionType: QuestionType;
   title: string;
+  totalPoints: number;
+  gradingRubric: RubricItem[];
+}
+
+export interface PrivateDebugEvaluation extends BasePrivateEvaluation {
+  questionType: "DEBUG";
   rootCause: string;
   correctedCode: string;
   hiddenTestCases: TestCaseItem[];
-  gradingRubric: RubricItem[];
-  totalPoints: number;
 }
 
-export interface PrivateScratchEvaluation {
-  questionNumber: 2;
+export interface PrivateScratchEvaluation extends BasePrivateEvaluation {
   questionType: "SCRATCH";
-  title: string;
   referenceSolution: string;
   hiddenTestCases: TestCaseItem[];
-  gradingRubric: RubricItem[];
-  totalPoints: number;
+}
+
+export interface PrivateMcqEvaluation extends BasePrivateEvaluation {
+  questionType: "MCQ";
+  correctOptionId: "A" | "B" | "C" | "D";
+  explanation: string;
+  wrongOptionReasons: Record<string, string>
 }
 
 export type PrivateQuestionEvaluation =
   | PrivateDebugEvaluation
-  | PrivateScratchEvaluation;
+  | PrivateScratchEvaluation
+  | PrivateMcqEvaluation;
 
 export interface PrivateEvaluationPackage {
   metadata: {
@@ -135,7 +178,7 @@ export interface PrivateEvaluationPackage {
     evaluatedModel: string;
     generatedAt: string;
   };
-  questions: [PrivateDebugEvaluation, PrivateScratchEvaluation];
+  questions: PrivateQuestionEvaluation[];
 }
 
 // -------------------------------------------------------------

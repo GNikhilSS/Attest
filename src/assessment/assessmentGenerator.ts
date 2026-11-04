@@ -1,15 +1,17 @@
-import "dotenv/config";
-import {
-  PROFICIENCY_LEVELS,
-  type AssessmentGenerationResult,
-  type AssessmentInput,
-  type EmployeeDebugQuestion,
-  type EmployeeFacingAssessment,
-  type EmployeeScratchQuestion,
-  type PrivateDebugEvaluation,
-  type PrivateEvaluationPackage,
-  type PrivateScratchEvaluation,
-  type ProficiencyLevelNumber,
+import { GEMINI_API_KEY, GROQ_API_KEY } from "../lib/env.js";
+import { DEFAULT_QUESTIONS_FORMAT, PROFICIENCY_LEVELS } from "./assessment.types.js";
+import type {
+  AssessmentGenerationResult,
+  AssessmentInput,
+  EmployeeFacingAssessment,
+  EmployeeQuestion,
+  McqOption,
+  PrivateEvaluationPackage,
+  PrivateQuestionEvaluation,
+  ProficiencyLevelNumber,
+  QuestionSpecItem,
+  RubricItem,
+  TestCaseItem,
 } from "./assessment.types.js";
 import {
   buildAssessmentPrompt,
@@ -24,6 +26,136 @@ export class LLMServiceError extends Error {
   ) {
     super(message);
     this.name = "LLMServiceError";
+  }
+}
+
+function fail(message: string): never {
+  throw new LLMServiceError(500, "GENERATION_FAILED", message);
+}
+
+const str = (v: unknown): string => (typeof v === "string" ? v.trim() : "");
+
+function requireTestCases(v: unknown, count: number, label: string): TestCaseItem[] {
+  if (!Array.isArray(v) || v.length !== count) {
+    fail(`${label}: expected ${count} test case(s), got ${Array.isArray(v) ? v.length : 0}.`);
+  }
+  return v.map((testcase: any) => ({
+    ...testcase,
+    input: String(testcase.input ?? ""),
+    expectedOutput: String(testcase.expectedOutput ?? ""),
+  }));
+}
+
+function requireOptions(v: unknown, label: string): McqOption[] {
+  if (!Array.isArray(v) || v.length !== 4) {
+    fail(`${label}: MCQ needs exactly 4 options.`);
+  }
+  const ids = v.map((o: any) => o?.id);
+  if (JSON.stringify(ids) !== JSON.stringify(["A", "B", "C", "D"])) {
+    fail(`${label}: option IDs must be A, B, C, D in that order.`);
+  }
+  return v.map((o: any) => ({ id: o.id, text: str(o.text) }));
+}
+
+function buildQuestionPair(
+  raw: any,
+  questionNumber: number,
+  language: string,
+): { employee: EmployeeQuestion; privateEval: PrivateQuestionEvaluation } {
+  const label = `Question ${questionNumber}`;
+  const title = str(raw.title) || label;
+  const problemStatement = str(raw.problemStatement);
+  const questionLanguage = str(raw.language) || language;
+  const pk = raw.privateEvaluation ?? {};
+  const totalPoints: number = typeof pk.totalPoints === "number" ? pk.totalPoints : 10;
+  const gradingRubric: RubricItem[] = Array.isArray(pk.gradingRubric) ? pk.gradingRubric : [];
+
+  if (!problemStatement) fail(`${label}: missing problemStatement.`);
+  if (gradingRubric.length === 0) fail(`${label}: missing gradingRubric.`);
+
+  switch (raw.questionType) {
+    case "DEBUG":
+      return {
+        employee: {
+          questionNumber, title, problemStatement, 
+          language: questionLanguage,
+          questionType: "DEBUG",
+          buggyCode: str(raw.buggyCode),
+          employeeInstructions:
+            str(raw.employeeInstructions) || "Identify the root cause of the bug and submit the corrected code.",
+          visibleTestCases: requireTestCases(raw.visibleTestCases, 2, label),
+        },
+        privateEval: {
+          questionNumber, title, totalPoints, gradingRubric,
+          questionType: "DEBUG",
+          rootCause: str(pk.rootCause),
+          correctedCode: str(pk.correctedCode),
+          hiddenTestCases: requireTestCases(pk.hiddenTestCases, 1, label),
+        },
+      };
+    
+    case "SCRATCH": {
+      const starter = str(raw.starterCode);
+      return {
+        employee: {
+          questionNumber, title, problemStatement, 
+          language: questionLanguage,
+          questionType: "SCRATCH",
+          inputOutputRequirements: str(raw.inputOutputRequirements),
+          constraints: Array.isArray(raw.constraints) ? raw.constraints : [],
+          edgeCases: Array.isArray(raw.edgeCases) ? raw.edgeCases : [],
+          ...(starter ? { starterCode: starter } : {}),
+          visibleTestCases: requireTestCases(raw.visibleTestCases, 2, label),
+        },
+        privateEval: {
+          questionNumber, title, totalPoints, gradingRubric,
+          questionType: "SCRATCH",
+          referenceSolution: str(pk.referenceSolution),
+          hiddenTestCases: requireTestCases(pk.hiddenTestCases, 1, label),
+        },
+      }
+    }
+
+    case "MCQ": {
+      const options = requireOptions(raw.options, label);
+      const correctOptionId = pk.correctOptionId;
+      if (!options.some((o) => o.id === correctOptionId)) {
+        fail(`${label}: correctOptionId "${correctOptionId}" is not one of the options.`);
+      }
+
+      const wrongOptionReasons: Record<string, string> =
+        pk.wrongOptionReasons && typeof pk.wrongOptionReasons === "object"
+          ? pk.wrongOptionReasons
+          : {};
+
+      const wrongIds = options.map((o) => o.id).filter((id) => id !== correctOptionId);
+      for (const id of wrongIds) {
+        if (!str(wrongOptionReasons[id])) {
+          fail(`${label}: missing wrongOptionReasons for option ${id}.`);
+        }
+      }
+
+      const snippet = str(raw.codeSnippet);
+      return {
+        employee: {
+          questionNumber, title, problemStatement, 
+          language: questionLanguage,
+          questionType: "MCQ",
+          options,
+          ...(snippet ? { codeSnippet: snippet } : {}),
+        },
+        privateEval: {
+          questionNumber, title, totalPoints, gradingRubric,
+          questionType: "MCQ",
+          correctOptionId,
+          explanation: str(pk.explanation),
+          wrongOptionReasons,
+        },
+      };
+    }
+
+    default:
+      return fail(`${label}: unknown questionType "${raw.questionType}".`);
   }
 }
 
@@ -184,8 +316,8 @@ export async function generateAssessment(
   const input: AssessmentInput = validateAssessmentInput(rawInput);
 
   // 2. Resolve API keys
-  const geminiApiKey = options.apiKey || process.env.GEMINI_API_KEY;
-  const groqApiKey = options.groqApiKey || process.env.GROQ_API_KEY;
+  const geminiApiKey = options.apiKey || GEMINI_API_KEY;
+  const groqApiKey = options.groqApiKey || GROQ_API_KEY;
 
   if (!geminiApiKey && !groqApiKey) {
     throw new LLMServiceError(
@@ -275,51 +407,39 @@ export async function generateAssessment(
   }
 
   // 6. Quality Checks & Verification (Exactly 2 questions: DEBUG and SCRATCH)
-  if (!parsedData.questions || !Array.isArray(parsedData.questions) || parsedData.questions.length !== 2) {
-    throw new LLMServiceError(
-      500,
-      "GENERATION_FAILED",
-      `Assessment generation quality check failed: Expected exactly 2 questions, got ${parsedData.questions?.length ?? 0}.`
-    );
+  const spec = input.questionsFormat ?? DEFAULT_QUESTIONS_FORMAT;
+  const rawQuestions: unknown = parsedData.questions;
+
+  if (!Array.isArray(rawQuestions)) {
+    fail("Assessment generation quality check failed: 'questions' is not an array.");
   }
 
-  const [q1, q2] = parsedData.questions;
+  const expectedTotal = spec.reduce((sum: number, s: QuestionSpecItem) => sum + s.count, 0);
+  if (rawQuestions.length !== expectedTotal) {
+    fail(`Assessment generation quality check failed: expected ${expectedTotal} questions, got ${rawQuestions.length}.`);
+  }
 
-  if (q1.questionType !== "DEBUG") {
-    throw new LLMServiceError(500, "GENERATION_FAILED", `Question 1 must be DEBUG, but got ${q1.questionType}`);
+  const actualCounts = new Map<string, number>();
+  for (const q of rawQuestions as any[]) {
+    const t = q?.questionType;
+    actualCounts.set(t, (actualCounts.get(t) ?? 0) + 1);
   }
-  if (q2.questionType !== "SCRATCH") {
-    throw new LLMServiceError(500, "GENERATION_FAILED", `Question 2 must be SCRATCH, but got ${q2.questionType}`);
+  for (const { type, count } of spec) {
+    const got = actualCounts.get(type) ?? 0;
+    if (got !== count) {
+      fail(`Assessment generation quality check failed: expected ${count} ${type} question(s), got ${got}.`);
+    }
   }
+
+  // 7. Format Employee-Facing Assessment (Strictly 2 visible test cases per question)
+  const built = (rawQuestions as any[]).map((raw, index) =>
+    buildQuestionPair(raw, index + 1, input.language)
+  );
+  const employeeQuestions = built.map((b) => b.employee);
+  const privateQuestions = built.map((b) => b.privateEval);
 
   const levelInfo = PROFICIENCY_LEVELS[input.proficiencyLevel as ProficiencyLevelNumber];
   const generatedAt = new Date().toISOString();
-
-  // 7. Format Employee-Facing Assessment (Strictly 2 visible test cases per question)
-  const employeeQ1: EmployeeDebugQuestion = {
-    questionNumber: 1,
-    questionType: "DEBUG",
-    title: q1.title || "Debugging & Code Correction",
-    problemStatement: q1.problemStatement || "",
-    buggyCode: q1.buggyCode || "",
-    language: q1.language || input.language,
-    employeeInstructions:
-      q1.employeeInstructions || "Identify the root cause of the bug and submit the corrected code.",
-    visibleTestCases: Array.isArray(q1.visibleTestCases) ? q1.visibleTestCases.slice(0, 2) : [],
-  };
-
-  const employeeQ2: EmployeeScratchQuestion = {
-    questionNumber: 2,
-    questionType: "SCRATCH",
-    title: q2.title || "Coding from Scratch",
-    problemStatement: q2.problemStatement || "",
-    inputOutputRequirements: q2.inputOutputRequirements || "",
-    constraints: Array.isArray(q2.constraints) ? q2.constraints : [],
-    edgeCases: Array.isArray(q2.edgeCases) ? q2.edgeCases : [],
-    starterCode: q2.starterCode || undefined,
-    language: q2.language || input.language,
-    visibleTestCases: Array.isArray(q2.visibleTestCases) ? q2.visibleTestCases.slice(0, 2) : [],
-  };
 
   const employeeFacing: EmployeeFacingAssessment = {
     metadata: {
@@ -329,35 +449,9 @@ export async function generateAssessment(
       proficiencyDescription: levelInfo.description,
       topic: input.topic || parsedData.metadata?.topic,
       summary: parsedData.metadata?.summary || `Assessment for ${input.language} at ${levelInfo.name} level.`,
-      totalQuestions: 2,
+      totalQuestions: employeeQuestions.length,
     },
-    questions: [employeeQ1, employeeQ2],
-  };
-
-  // 8. Format Private Evaluation Package (Strictly 1 hidden test case for Set A per question)
-  const privateQ1: PrivateDebugEvaluation = {
-    questionNumber: 1,
-    questionType: "DEBUG",
-    title: q1.title || employeeQ1.title,
-    rootCause: q1.privateEvaluation?.rootCause || "",
-    correctedCode: q1.privateEvaluation?.correctedCode || "",
-    hiddenTestCases: Array.isArray(q1.privateEvaluation?.hiddenTestCases)
-      ? q1.privateEvaluation.hiddenTestCases.slice(0, 1)
-      : [],
-    gradingRubric: Array.isArray(q1.privateEvaluation?.gradingRubric) ? q1.privateEvaluation.gradingRubric : [],
-    totalPoints: q1.privateEvaluation?.totalPoints || 10,
-  };
-
-  const privateQ2: PrivateScratchEvaluation = {
-    questionNumber: 2,
-    questionType: "SCRATCH",
-    title: q2.title || employeeQ2.title,
-    referenceSolution: q2.privateEvaluation?.referenceSolution || "",
-    hiddenTestCases: Array.isArray(q2.privateEvaluation?.hiddenTestCases)
-      ? q2.privateEvaluation.hiddenTestCases.slice(0, 1)
-      : [],
-    gradingRubric: Array.isArray(q2.privateEvaluation?.gradingRubric) ? q2.privateEvaluation.gradingRubric : [],
-    totalPoints: q2.privateEvaluation?.totalPoints || 10,
+    questions: employeeQuestions,
   };
 
   const privateEvaluation: PrivateEvaluationPackage = {
@@ -368,7 +462,7 @@ export async function generateAssessment(
       evaluatedModel: activeModelUsed,
       generatedAt,
     },
-    questions: [privateQ1, privateQ2],
+    questions: privateQuestions,
   };
 
   return {
